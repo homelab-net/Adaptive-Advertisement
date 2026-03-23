@@ -1,0 +1,197 @@
+Adaptive Retail Storage Retention and Eviction Guidance v1.0
+Status: Guiding document only; not authoritative
+
+Purpose
+This document provides implementation guidance for storage retention, trimming, and eviction behavior for the privacy-first adaptive retail advertising MVP. It is intended to help developers translate the active requirements baseline into practical defaults and control logic. It does not override the authoritative requirements, architecture, interface, validation, or roadmap documents. Where any conflict exists, the highest-revision authoritative source controls.
+
+Why this document exists
+The active source set requires bounded storage growth, storage-full protection, metadata-only retention, and operational resilience under disk pressure, but does not fully parameterize every retention value in a single implementation-ready place. This guidance consolidates recommended defaults so development can proceed consistently while preserving the authority of the baseline documents.
+
+Source-aligned foundation
+This guidance is framed by the following documented constraints and requirements:
+- Raw visual retention is prohibited; the system is metadata-only for retained operational data.
+- Storage growth is bounded to 250 MB/day worst case.
+- Log rotation, database TTL, and hard caps plus eviction are expected controls.
+- Storage-full behavior must be tested.
+- Playback continuity remains the hard priority if persistence degrades.
+- Event retention windows are deployment-configurable.
+
+Guiding principles
+1. Playback continuity takes priority over historical detail retention.
+2. Privacy constraints take priority over diagnostic convenience.
+3. The device should fail soft under storage pressure.
+4. Retention should be explicit, bounded, and observable.
+5. Storage protection should begin before the disk is critically full.
+6. The MVP should retain enough evidence for pilot evaluation, but not accumulate data indefinitely.
+
+Recommended implementation posture
+Use the smallest policy set that reliably prevents disk-full cascades:
+- Rotate logs aggressively.
+- Apply TTL pruning to high-volume event tables.
+- Keep only approved assets and protected fallback assets cached locally.
+- Reserve a free-space floor.
+- Start protective cleanup before the system reaches emergency conditions.
+- Preserve only one rollback-capable last-known-good artifact set in MVP.
+
+Recommended retention defaults
+These are guidance defaults, not locked authoritative requirements.
+
+1. Business objects
+Retain campaigns, templates, approved assets, manifests, modifier policies, and related business entities until archived or deleted by operator policy. These are controlled by business lifecycle, not TTL.
+
+2. Approved asset cache
+Retain only assets that are:
+- referenced by an enabled campaign,
+- part of the protected fallback bundle, or
+- required by the current or last-known-good approved manifest set.
+Remove orphaned cache entries when no longer referenced.
+
+3. Decision events
+Recommended default retention: 30 days.
+Rationale: enough for pilot comparison windows without allowing indefinite growth.
+
+4. Playback events
+Recommended default retention: 30 days.
+Rationale: enough for pilot evidence and operational review.
+
+5. Fault events
+Recommended default retention: 90 days.
+Rationale: useful for troubleshooting and pilot support history.
+
+6. Maintenance events
+Recommended default retention: 90 days.
+Rationale: preserves operator and system maintenance history across pilot cycles.
+
+7. Diagnostic and support logs
+Recommended default retention: 14 days.
+Rationale: short, bounded, and sufficient for near-term troubleshooting.
+
+8. Metrics rollups and daily aggregates
+Recommended default retention: 180 days.
+Rationale: aggregate records are small and useful for longer-term trend review.
+
+9. Temporary exports and debug bundles
+Recommended default retention: 7 days maximum.
+Rationale: temporary artifacts should self-expire quickly.
+
+10. Raw visual data
+Prohibited. No retention allowed.
+
+Recommended watermark thresholds
+Use both percentage-based and absolute free-space thresholds.
+
+Warn threshold
+- Trigger at 70 percent used or less than 15 GB free.
+- Action: raise warning and expose status in dashboard/system view.
+
+Protect threshold
+- Trigger at 80 percent used or less than 10 GB free.
+- Action: run normal eviction and retention jobs immediately.
+
+Critical threshold
+- Trigger at 90 percent used or less than 5 GB free.
+- Action: run aggressive cleanup, compress and rotate logs, delete expired temporary artifacts, and halt nonessential exports.
+
+Fail-safe floor
+- Trigger at 95 percent used or less than 2 GB free.
+- Action: freeze nonessential persistence growth, preserve playback behavior, and keep only minimal operational logging.
+
+Recommended eviction order
+When cleanup is required, evict in this order:
+1. Expired temporary exports and debug bundles.
+2. Rotated/compressed logs older than policy.
+3. Decision events older than TTL.
+4. Playback events older than TTL.
+5. Rollup staging/intermediate data older than policy.
+6. Orphaned local cache assets not referenced by active campaign, protected fallback set, or last-known-good manifest.
+7. Fault and maintenance records older than TTL.
+8. Obsolete update artifacts older than the current rollback point.
+
+Data that should not be evicted during normal protection flow
+- Current fallback bundle.
+- Current approved runtime manifest set.
+- Last-known-good approved manifest set needed to preserve playback continuity.
+- Active business entities still required for runtime.
+- In-policy audit records still within retention window.
+
+Recommended logging policy
+- Use structured logs.
+- Do not log blobs, images, frame dumps, embeddings, or privacy-sensitive payloads.
+- Rotate at approximately 50 MB per file.
+- Keep approximately 5 rotated files per service.
+- Compress rotated logs older than one cycle.
+- Delete compressed logs older than 14 days.
+- Allow debug logging only as a time-bounded support mode with automatic expiry.
+
+Recommended database TTL posture
+Run scheduled retention jobs locally during a maintenance-safe window.
+Suggested defaults:
+- decision_event: 30 days
+- ad_playback_event: 30 days
+- system_fault_event: 90 days
+- maintenance_event: 90 days
+- rollup staging/intermediate tables: 7 days
+- daily aggregate analytics: 180 days
+
+Recommended asset cache controls
+Track at minimum:
+- asset checksum
+- approval state
+- last referenced timestamp
+- campaign references
+- fallback bundle membership
+- last-known-good manifest membership
+Only remove assets that are both unprotected and unreferenced.
+
+Persistence degradation guidance
+If the database or storage subsystem degrades:
+- playback should continue,
+- switching/adaptive behavior may freeze or fall back,
+- the supervisor should classify the condition as persistence degraded rather than player failed,
+- nonessential writes should be reduced or suppressed,
+- minimal logging should continue within bounded limits.
+
+Update and rollback guidance for MVP
+To control storage growth, retain only:
+- the currently running release,
+- one rollback-capable last-known-good artifact set,
+- the current update artifact until success or failure is decided.
+Do not accumulate multiple historical update bundles on-device in MVP.
+
+Observability guidance
+Expose storage health in the local dashboard or status surface:
+- disk usage percent
+- free space in GB
+- current watermark state
+- last retention/cleanup job result
+- rows pruned by table
+- bytes reclaimed by cache cleanup
+- active alert if storage enters protect or critical mode
+
+Suggested validation tests
+1. Bounded-growth soak test
+Verify worst-case storage growth stays within the documented budget.
+
+2. TTL pruning test
+Verify expired rows are pruned and protected records are retained.
+
+3. Log rotation test
+Verify log rotation, compression, and age-based deletion work as intended.
+
+4. Disk-pressure drill
+Simulate disk pressure and verify watermark actions fire in sequence without interrupting playback.
+
+5. Near-full fail-safe test
+Verify the system does not enter an uncontrolled full-disk state and preserves playback continuity.
+
+6. Privacy storage audit
+Verify no raw images, clips, frames, embeddings, or prohibited visual artifacts are retained.
+
+Implementation note for BOM decisions
+This guidance supports the following lean storage position for MVP:
+- 128 GB NVMe is acceptable for disciplined bring-up and may be acceptable for a tightly managed first pilot.
+- 256 GB NVMe is the safer recommended pilot choice.
+- Larger capacities may be used for operational comfort, but are not required by the current MVP baseline.
+
+Document use note
+This document should be used as implementation guidance and a developer alignment aid. It should not be treated as an authoritative baseline source unless explicitly re-baselined into the controlled documentation set.
