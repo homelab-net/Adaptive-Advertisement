@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://homelab-net.github.io/Adaptive-Advertisement/contracts/decision-optimizer/audience-state-signal.schema.json",
+  "title": "AudienceStateSignal",
+  "description": "Smoothed, confidence-gated audience state message published from audience-state to decision-optimizer via MQTT. ICD-3 contract. Downstream of ICD-2 (cv-observation). No images, frame URLs, face embeddings, or reversible biometric templates are permitted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "message_type",
+    "message_id",
+    "produced_at",
+    "tenant_id",
+    "site_id",
+    "camera_id",
+    "state",
+    "source_quality",
+    "privacy"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "message_type": {
+      "type": "string",
+      "const": "audience_state_signal"
+    },
+    "message_id": {
+      "description": "Stable unique identifier for this message. Used for deduplication under MQTT QoS 1.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "produced_at": {
+      "description": "UTC RFC 3339 timestamp when this smoothed state signal was emitted.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "site_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "camera_id": {
+      "description": "Stable camera identifier, unique within a site. Must match the camera_id in the source cv-observation messages.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "state": {
+      "description": "Smoothed and confidence-gated audience state estimate for decision use. Derived from one or more ICD-2 cv-observation messages.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["presence", "stability"],
+      "properties": {
+        "presence": {
+          "description": "Smoothed person presence estimate for the current window.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count", "confidence"],
+          "properties": {
+            "count": {
+              "description": "Smoothed estimate of persons present. Not a per-identity count.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "confidence": {
+              "description": "Confidence in the smoothed presence estimate, in range [0.0, 1.0].",
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0
+            }
+          }
+        },
+        "stability": {
+          "description": "Stability indicators that govern whether the decision-optimizer should act on this state or hold the current content.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state_stable", "freeze_decision"],
+          "properties": {
+            "state_stable": {
+              "description": "True if the state estimate is stable enough for normal decision logic. False during initial warm-up or rapid change.",
+              "type": "boolean"
+            },
+            "freeze_decision": {
+              "description": "True if the decision-optimizer must hold its current content selection and not switch. Driven by low confidence, rapid flux, or policy-minimum dwell not yet elapsed.",
+              "type": "boolean"
+            },
+            "observations_in_window": {
+              "description": "Number of ICD-2 cv-observation messages that contributed to this state estimate.",
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "demographics": {
+          "description": "Optional smoothed demographic distributions. Must not contain per-person identifiers. All attributes are probabilistic aggregates only. Suppressed when confidence is below gating threshold.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "age_group": {
+              "description": "Smoothed distribution over coarse age bins. Values are probabilities summing to approximately 1.0.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "child":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "young_adult": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "adult":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "senior":      { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+              }
+            },
+            "dwell_estimate_ms": {
+              "description": "Smoothed average dwell time estimate for persons present, in milliseconds.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "suppressed": {
+              "description": "True if demographic attributes were suppressed due to low confidence gating.",
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "source_quality": {
+      "description": "Rollup of upstream CV signal quality. Used by the decision-optimizer to evaluate how fresh and reliable the state estimate is.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signal_age_ms", "pipeline_degraded"],
+      "properties": {
+        "signal_age_ms": {
+          "description": "Age of the most recent ICD-2 cv-observation that contributed to this state, in milliseconds. High values indicate stale input.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "pipeline_degraded": {
+          "description": "True if the upstream input-cv pipeline was in a degraded state during the contributing observation window.",
+          "type": "boolean"
+        },
+        "observations_dropped": {
+          "description": "Count of ICD-2 messages that were received but excluded from this state estimate due to quality gating.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "privacy": {
+      "description": "Hard contract flags. All must be false. Schema-enforced privacy boundary. Mirrors ICD-2 privacy block — the smoothing layer must not add image data that cv-observation forbids.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contains_images",
+        "contains_frame_urls",
+        "contains_face_embeddings"
+      ],
+      "properties": {
+        "contains_images": {
+          "type": "boolean",
+          "const": false
+        },
+        "contains_frame_urls": {
+          "type": "boolean",
+          "const": false
+        },
+        "contains_face_embeddings": {
+          "type": "boolean",
+          "const": false
+        }
+      }
+    }
+  }
+}

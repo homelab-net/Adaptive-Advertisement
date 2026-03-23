@@ -3,7 +3,7 @@
 *Adaptive Retail Advertising MVP · living execution-state artifact*
 
 **Last updated:** 2026-03-23
-**Status:** Pre-implementation — documentation and contract baseline complete; services not yet started
+**Status:** Pre-implementation — contract baseline complete including ICD-3; services not yet started
 
 > Agents must read this document before starting work and update it after any material change. If this snapshot conflicts with an authoritative baseline document, log the conflict in the Change Resolution Matrix rather than silently reconciling it.
 
@@ -29,7 +29,7 @@
 | JetPack / L4T | **Locked: JetPack 6.x / L4T 36.x** — see `decisions/2026-03-23-jetpack-version.md` |
 | DeepStream | 7.x (aligned to JetPack 6.x) |
 | Camera ingest | **Locked: CSI / local-device (V4L2)** — see `decisions/2026-03-23-csi-local-ingest-founder-direction.md` |
-| Camera SKU | Not qualified — exact SKU and bring-up on target Jetson not yet verified |
+| Camera SKU | **Candidate selected:** Arducam IMX477 HQ (CSI, 12 MP, auto IR-cut) — see `decisions/2026-03-23-camera-sku-candidate.md`; bring-up qualification pending |
 | JetPack point release | Not pinned — depends on camera SKU qualification result |
 | MQTT broker | **Locked: Eclipse Mosquitto 2.x** — see `decisions/2026-03-23-mqtt-broker.md` |
 | Storage | 256 GB NVMe pilot default |
@@ -55,7 +55,7 @@
 | ICD-2: input-cv → audience-state | `contracts/audience-state/cv-observation.schema.json` | v1.0 — metadata-only, privacy fields schema-enforced |
 | ICD-4: decision → player | `contracts/player/player-command.schema.json` | v1.0 — commands, sequence ordering defined |
 | ICD-5: creative → player | `contracts/creative/creative-manifest.schema.json` | v1.0 — approval fields required |
-| ICD-3: audience-state → decision | Defined in ICD v1.1 doc | No code-facing schema stub yet |
+| ICD-3: audience-state → decision | `contracts/decision-optimizer/audience-state-signal.schema.json` | v1.0 — smoothed state, stability flags, privacy enforced |
 | ICD-6/7/8: dashboard, postgres, supervisor | Defined in interface addendum | No code-facing schema stubs yet |
 
 ## 5. Service Status
@@ -84,15 +84,15 @@
 
 | Risk | Status |
 |---|---|
-| Camera SKU qualification | Open — exact CSI camera SKU and bring-up on target Jetson not verified; blocks JetPack point-release pin |
+| Camera SKU qualification | Open — Arducam IMX477 HQ selected as candidate; bring-up on target Jetson not yet verified; blocks JetPack point-release pin |
 | Player not yet scaffolded | Open — player is the hard dependency; implementation should start here |
-| ICD-3 no code-facing schema | Open — audience-state → decision-optimizer schema stub not yet created |
+| ICD-3 no code-facing schema | **Closed** — `contracts/decision-optimizer/audience-state-signal.schema.json` v1.0 created 2026-03-23 |
 | ICD-6/7/8 no code-facing schemas | Open — dashboard, postgres, supervisor interface stubs not yet created |
 
 ## 8. Immediate Next Actions
 
 1. Scaffold `player` service with screen-never-blank fallback posture (hard dependency).
-2. Create ICD-3 code-facing schema stub (`audience-state` → `decision-optimizer`).
-3. Acquire and qualify camera SKU on target Jetson Orin Nano hardware.
+2. ~~Create ICD-3 code-facing schema stub~~ — Done (`contracts/decision-optimizer/audience-state-signal.schema.json` v1.0).
+3. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
 4. Pin JetPack point release after camera qualification result.
 5. Scaffold `input-cv` after camera qualification confirms device bring-up.
