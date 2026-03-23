@@ -3,7 +3,7 @@
 *Adaptive Retail Advertising MVP · living execution-state artifact*
 
 **Last updated:** 2026-03-23
-**Status:** Pre-implementation — contract baseline complete including ICD-3; services not yet started
+**Status:** Player service scaffolded and tested; all other services not yet started
 
 > Agents must read this document before starting work and update it after any material change. If this snapshot conflicts with an authoritative baseline document, log the conflict in the Change Resolution Matrix rather than silently reconciling it.
 
@@ -66,7 +66,7 @@
 | audience-state | Not Started | MQTT subscriber; ICD-2 contract defined |
 | decision-optimizer | Not Started | Rules-first for MVP; ICD-3 interface defined in ICD docs |
 | creative | Not Started | Approved-manifest authority; ICD-5 contract defined |
-| player | Not Started | **Hard dependency — first-priority service to scaffold**; screen-never-blank rule governs all fallback logic |
+| player | Scaffolded | `services/player/` — state machine, command handler (ICD-4), manifest store (ICD-5), stub + mpv renderer, fallback bundle, health endpoints, 61 unit tests passing; RENDERER_BACKEND=stub for CI; mpv wiring complete pending hardware bring-up |
 | dashboard-api | Not Started | Canonical business-logic write authority |
 | postgres | Not Started | Local storage; schema migrations required |
 | supervisor | Not Started | Restart-ladder and safe-mode logic |
@@ -75,7 +75,7 @@
 
 | Item | Status |
 |---|---|
-| Unit tests | Not Started |
+| Unit tests | In Progress — 61 tests passing for player service (state machine, command handler, manifest store) |
 | Contract tests | Not Started |
 | Integration tests | Not Started |
 | System / recovery evidence | Not Started |
@@ -85,13 +85,13 @@
 | Risk | Status |
 |---|---|
 | Camera SKU qualification | Open — Arducam IMX477 HQ selected as candidate; bring-up on target Jetson not yet verified; blocks JetPack point-release pin |
-| Player not yet scaffolded | Open — player is the hard dependency; implementation should start here |
+| Player not yet scaffolded | **Closed** — player scaffolded 2026-03-23; see `services/player/` |
 | ICD-3 no code-facing schema | **Closed** — `contracts/decision-optimizer/audience-state-signal.schema.json` v1.0 created 2026-03-23 |
 | ICD-6/7/8 no code-facing schemas | Open — dashboard, postgres, supervisor interface stubs not yet created |
 
 ## 8. Immediate Next Actions
 
-1. Scaffold `player` service with screen-never-blank fallback posture (hard dependency).
+1. ~~Scaffold `player` service with screen-never-blank fallback posture~~ — Done (`services/player/`). CRM-002 logged for freeze/unfreeze schema ambiguity.
 2. ~~Create ICD-3 code-facing schema stub~~ — Done (`contracts/decision-optimizer/audience-state-signal.schema.json` v1.0).
 3. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
 4. Pin JetPack point release after camera qualification result.
