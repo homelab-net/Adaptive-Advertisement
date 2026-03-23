@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0.0",
+  "_comment": "Default MVP rules. Replace manifest_ids with your approved manifest identifiers.",
+  "min_dwell_ms": 10000,
+  "cooldown_ms": 5000,
+  "rules": [
+    {
+      "rule_id": "group-audience",
+      "priority": 20,
+      "manifest_id": "manifest-group",
+      "_comment": "3+ people present with high confidence — group-mode content",
+      "conditions": {
+        "presence_count_gte": 3,
+        "presence_confidence_gte": 0.7
+      }
+    },
+    {
+      "rule_id": "single-viewer",
+      "priority": 10,
+      "manifest_id": "manifest-default",
+      "_comment": "1 or more people present with sufficient confidence — standard content",
+      "conditions": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.7
+      }
+    },
+    {
+      "rule_id": "attract-loop",
+      "priority": 0,
+      "manifest_id": "manifest-attract",
+      "_comment": "Catch-all: no audience or low-confidence signal — attract loop",
+      "conditions": {}
+    }
+  ]
+}

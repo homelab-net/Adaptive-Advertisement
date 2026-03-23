@@ -3,7 +3,7 @@
 *Adaptive Retail Advertising MVP · living execution-state artifact*
 
 **Last updated:** 2026-03-23
-**Status:** Player service scaffolded and tested; all other services not yet started
+**Status:** Player and decision-optimizer services scaffolded and tested; remaining services not yet started
 
 > Agents must read this document before starting work and update it after any material change. If this snapshot conflicts with an authoritative baseline document, log the conflict in the Change Resolution Matrix rather than silently reconciling it.
 
@@ -64,7 +64,7 @@
 |---|---|---|
 | input-cv | Not Started | Requires CSI/V4L2 bring-up; `camera-source.schema.json` v1.1 is the config contract |
 | audience-state | Not Started | MQTT subscriber; ICD-2 contract defined |
-| decision-optimizer | Not Started | Rules-first for MVP; ICD-3 interface defined in ICD docs |
+| decision-optimizer | Scaffolded | `services/decision-optimizer/` — 1 Hz decision loop, rules-first policy engine (JSON config), ICD-3 MQTT signal consumer (aiomqtt), ICD-4 WebSocket server (player gateway), 54 unit tests passing |
 | creative | Not Started | Approved-manifest authority; ICD-5 contract defined |
 | player | Scaffolded | `services/player/` — state machine, command handler (ICD-4), manifest store (ICD-5), stub + mpv renderer, fallback bundle, health endpoints, 61 unit tests passing; RENDERER_BACKEND=stub for CI; mpv wiring complete pending hardware bring-up |
 | dashboard-api | Not Started | Canonical business-logic write authority |
@@ -75,7 +75,7 @@
 
 | Item | Status |
 |---|---|
-| Unit tests | In Progress — 61 tests passing for player service (state machine, command handler, manifest store) |
+| Unit tests | In Progress — 115 tests passing total: player (61), decision-optimizer (54) |
 | Contract tests | Not Started |
 | Integration tests | Not Started |
 | System / recovery evidence | Not Started |
