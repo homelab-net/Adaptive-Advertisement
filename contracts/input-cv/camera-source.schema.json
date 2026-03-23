@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://homelab-net.github.io/Adaptive-Advertisement/contracts/input-cv/camera-source.schema.json",
+  "title": "InputCvCameraSourceConfig",
+  "description": "Code-facing configuration schema for MVP CSI/local-device camera ingest on Jetson-class hardware.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "camera_id",
+    "source_type",
+    "device_path",
+    "enabled",
+    "pixel_format",
+    "width",
+    "height",
+    "fps"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.1.0"
+    },
+    "camera_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "source_type": {
+      "type": "string",
+      "enum": ["local_v4l2"]
+    },
+    "device_path": {
+      "type": "string",
+      "pattern": "^/dev/video[0-9]+$"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "pixel_format": {
+      "type": "string",
+      "enum": ["NV12", "YUYV", "MJPG", "RGB3", "BGR3"]
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 320,
+      "maximum": 7680
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 240,
+      "maximum": 4320
+    },
+    "fps": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120
+    },
+    "startup_timeout_ms": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 120000,
+      "default": 10000
+    },
+    "read_timeout_ms": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 120000,
+      "default": 3000
+    },
+    "reopen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "initial_backoff_ms", "max_backoff_ms"],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "initial_backoff_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 60000,
+          "default": 500
+        },
+        "max_backoff_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 600000,
+          "default": 10000
+        }
+      }
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    }
+  }
+}
