@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://homelab-net.github.io/Adaptive-Advertisement/contracts/player/player-command.schema.json",
+  "title": "PlayerCommand",
+  "description": "Command message delivered from decision-optimizer to player via WebSocket. ICD-4 contract. Player must enforce ordering by sequence_number and apply idempotency by command_id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "command_id",
+    "sequence_number",
+    "produced_at",
+    "command_type"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "command_id": {
+      "description": "Stable unique identifier for this command. Used by player for idempotent application. Must be treated as already-applied if seen again.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "sequence_number": {
+      "description": "Monotonically increasing sequence number per session. Player must not apply a command with a lower sequence_number than the last applied command.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "produced_at": {
+      "description": "UTC RFC 3339 timestamp when this command was produced by the decision engine.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "command_type": {
+      "description": "The type of player command.",
+      "type": "string",
+      "enum": [
+        "activate_creative",
+        "freeze",
+        "safe_mode",
+        "clear_safe_mode"
+      ]
+    },
+    "activate_creative": {
+      "description": "Payload for command_type='activate_creative'. Required when command_type is 'activate_creative'.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_id", "min_dwell_ms"],
+      "properties": {
+        "manifest_id": {
+          "description": "Identifier of the approved creative manifest to activate. Must reference a manifest the player has already received or can fetch.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "min_dwell_ms": {
+          "description": "Minimum dwell duration before this creative may be switched, in milliseconds.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "cooldown_ms": {
+          "description": "Minimum time after this creative ends before the same creative may be reactivated, in milliseconds.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "rationale": {
+          "description": "Human-readable explanation of why this creative was selected. Used for explainability and dashboard display.",
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    },
+    "freeze": {
+      "description": "Payload for command_type='freeze'. Instructs the player to hold the current creative and stop accepting switch commands until unfrozen.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "description": "Machine-readable reason for the freeze.",
+          "type": "string",
+          "enum": [
+            "cv_degraded",
+            "decision_degraded",
+            "thermal_protection",
+            "operator_override"
+          ]
+        }
+      }
+    },
+    "safe_mode": {
+      "description": "Payload for command_type='safe_mode'. Instructs the player to switch to the static fallback bundle and ignore further activate_creative commands until cleared.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "description": "Machine-readable reason for entering safe mode.",
+          "type": "string",
+          "enum": [
+            "supervisor_escalation",
+            "operator_manual",
+            "boot_loop_protection"
+          ]
+        }
+      }
+    }
+  }
+}
