@@ -1,0 +1,71 @@
+Adaptive Retail Advertising Project — Software Selection Directive
+
+Purpose
+
+This document records the guiding principles for software selection and
+architecture decisions for the adaptive retail advertising system. The
+goal is to ensure that all technical choices prioritize long-term
+correctness, maintainability, and deployment simplicity over short-term
+convenience.
+
+Core Directive
+
+All software recommendations must prioritize the best long-term fit for
+the use case from the first suggestion. The system should be designed to
+avoid rebuilds caused by selecting tools that are merely convenient for
+early development but unsuitable for production deployment.
+
+Selection Criteria
+
+All software and frameworks should be evaluated using the following
+criteria:
+
+1.  Use‑Case Fit
+    -   The tool must be the best actual solution for the specific
+        problem domain.
+    -   Avoid choosing tools simply because they are familiar or easy to
+        start with.
+2.  Long‑Term Maintainability
+    -   The tool must have a stable development trajectory and strong
+        community or organizational support.
+    -   Avoid platforms likely to require re‑platforming later.
+3.  Solo‑Founder Feasibility
+    -   Implementation, debugging, and maintenance must remain realistic
+        for a solo founder.
+4.  Edge / Jetson Compatibility
+    -   All systems must run reliably on Jetson‑class edge hardware.
+    -   GPU acceleration and edge optimization are mandatory
+        considerations.
+5.  Privacy / Local‑First Architecture
+    -   Processing should occur locally whenever possible.
+    -   Images should be processed in real time and discarded
+        immediately after inference.
+    -   No biometric storage or identity tracking.
+6.  Open‑Source Maturity
+    -   Prefer well‑maintained open‑source tools with strong
+        documentation and active development.
+7.  Integration Cleanliness
+    -   Minimize glue code and complex middleware.
+    -   Favor systems with clear APIs and modular architecture.
+
+Software Recommendation Classification
+
+When proposing tools or frameworks, they should be categorized as
+follows:
+
+Best Recommendation The tool that best satisfies long‑term architectural
+and operational requirements.
+
+Acceptable Alternative A viable fallback if constraints change.
+
+Avoid Tools that appear convenient but are likely to create technical
+debt or require rebuilding later.
+
+Guiding Principle
+
+The system should aim for:
+
+    "The smallest commercially useful MVP built on the correct long‑term foundations."
+
+This principle ensures that early prototypes evolve directly into
+production systems without major rewrites.
