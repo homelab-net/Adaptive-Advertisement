@@ -242,6 +242,8 @@ services:
     networks: [backend]
     volumes:
       - app_data:/data
+      # Share the fallback library so dashboard-api can list/activate assets.
+      - fallback_library:/data/fallback-library
     environment:
       DASHBOARD_DATABASE_URL: postgresql+asyncpg://dashboard:dashboard@postgres:5432/dashboard
       DASHBOARD_HOST: "0.0.0.0"
@@ -253,6 +255,7 @@ services:
       DASHBOARD_AUDIENCE_STATE_HEALTHZ_URL: http://audience-state:8082/healthz
       DASHBOARD_DECISION_OPTIMIZER_HEALTHZ_URL: http://decision-optimizer:8081/healthz
       DASHBOARD_CREATIVE_HEALTHZ_URL: http://creative:8090/healthz
+      DASHBOARD_FALLBACK_LIBRARY_DIR: /data/fallback-library
       DASHBOARD_LOG_LEVEL: INFO
     ports:
       - "127.0.0.1:8004:8004"

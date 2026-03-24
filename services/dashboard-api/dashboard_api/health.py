@@ -9,8 +9,10 @@ Consistent with all other services in this repo:
 import logging
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
+
+from adaptive_shared.metrics import generate_metrics_response
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
@@ -20,6 +22,13 @@ router = APIRouter(tags=["health"])
 async def healthz() -> JSONResponse:
     """Liveness — always 200."""
     return JSONResponse({"status": "ok"})
+
+
+@router.get("/metrics", include_in_schema=False)
+async def metrics() -> Response:
+    """Prometheus metrics — OBS-003."""
+    body, ctype = generate_metrics_response()
+    return Response(content=body, media_type=ctype)
 
 
 @router.get("/readyz")

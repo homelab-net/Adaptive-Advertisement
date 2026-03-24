@@ -18,6 +18,8 @@ from typing import Dict
 
 from aiohttp import web
 
+from adaptive_shared.metrics import aiohttp_metrics_handler
+
 from .service_table import ServiceState
 
 log = logging.getLogger(__name__)
@@ -96,4 +98,5 @@ async def make_health_app(
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/readyz", readyz)
     app.router.add_get("/status", status)
+    app.router.add_get("/metrics", aiohttp_metrics_handler)
     return app

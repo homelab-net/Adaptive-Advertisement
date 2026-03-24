@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Asset storage root
     asset_storage_dir: str = "/data/assets"
 
+    # Fallback asset library — shared volume with the player service.
+    # Drop PNGs / MP4s here; write _selected to pin one without a restart.
+    fallback_library_dir: str = "/data/fallback-library"
+
     # --- Observability ---------------------------------------------------
     log_level: str = "INFO"
 

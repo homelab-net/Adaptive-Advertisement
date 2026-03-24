@@ -63,6 +63,56 @@ log "Fallback asset: ${FALLBACK_ASSET}"
 install -d -m 755 "${MANIFEST_DIR}"
 
 # ---------------------------------------------------------------------------
+# validate_manifest <path>
+# Inline structural validation against ICD-5 required fields.
+# Does not require jsonschema to be installed.
+# ---------------------------------------------------------------------------
+validate_manifest() {
+    local out="$1"
+    python3 - "$out" <<'PYEOF'
+import json, sys
+
+path = sys.argv[1]
+try:
+    with open(path) as f:
+        m = json.load(f)
+except json.JSONDecodeError as e:
+    print(f"[seed-content] ERROR: invalid JSON in {path}: {e}", file=sys.stderr)
+    sys.exit(1)
+
+# ICD-5 / creative-manifest.schema.json required fields
+required_top = ["schema_version", "manifest_id", "approved_at", "approved_by", "items"]
+for field in required_top:
+    if field not in m:
+        print(f"[seed-content] ERROR: missing required field '{field}' in {path}", file=sys.stderr)
+        sys.exit(1)
+
+if m["schema_version"] != "1.0.0":
+    print(f"[seed-content] ERROR: schema_version must be '1.0.0', got {m['schema_version']!r}", file=sys.stderr)
+    sys.exit(1)
+
+if not isinstance(m["items"], list) or len(m["items"]) < 1:
+    print(f"[seed-content] ERROR: items must be a non-empty array in {path}", file=sys.stderr)
+    sys.exit(1)
+
+required_item = ["item_id", "asset_id", "asset_type", "duration_ms"]
+for i, item in enumerate(m["items"]):
+    for field in required_item:
+        if field not in item:
+            print(f"[seed-content] ERROR: items[{i}] missing '{field}' in {path}", file=sys.stderr)
+            sys.exit(1)
+    if item["asset_type"] not in ("image", "video", "html"):
+        print(f"[seed-content] ERROR: items[{i}].asset_type invalid: {item['asset_type']!r}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(item["duration_ms"], int) or item["duration_ms"] < 1000:
+        print(f"[seed-content] ERROR: items[{i}].duration_ms must be int >= 1000", file=sys.stderr)
+        sys.exit(1)
+
+print(f"[seed-content] Schema OK: {path}")
+PYEOF
+}
+
+# ---------------------------------------------------------------------------
 # write_manifest <manifest_id> <description>
 # ---------------------------------------------------------------------------
 write_manifest() {
@@ -101,6 +151,7 @@ with open("${out}", "w") as f:
     json.dump(manifest, f, indent=2)
 print("[seed-content] Written: ${out}")
 PYEOF
+    validate_manifest "${out}"
 }
 
 # ---------------------------------------------------------------------------

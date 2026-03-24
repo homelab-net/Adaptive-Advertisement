@@ -36,6 +36,7 @@ from .routers.assets import router as assets_router
 from .routers.campaigns import router as campaigns_router
 from .routers.system import router as system_router
 from .routers.analytics import router as analytics_router
+from .routers.fallback import router as fallback_router
 
 setup_logging("dashboard-api", settings.log_level)
 log = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(campaigns_router)
     app.include_router(system_router)
     app.include_router(analytics_router)
+    app.include_router(fallback_router)
 
     return app
 

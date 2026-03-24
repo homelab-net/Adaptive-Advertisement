@@ -30,6 +30,8 @@ import logging
 
 from aiohttp import web
 
+from adaptive_shared.metrics import aiohttp_metrics_handler
+
 from .manifest_store import ManifestStore, NOT_FOUND, UNAPPROVED, EXPIRED
 
 log = logging.getLogger(__name__)
@@ -107,5 +109,6 @@ def make_app(store: ManifestStore, is_ready: list) -> web.Application:
     app.router.add_get("/manifests", list_manifests)
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/readyz", readyz)
+    app.router.add_get("/metrics", aiohttp_metrics_handler)
 
     return app

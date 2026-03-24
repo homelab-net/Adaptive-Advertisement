@@ -9,6 +9,8 @@ import logging
 
 from aiohttp import web
 
+from adaptive_shared.metrics import aiohttp_metrics_handler
+
 from .observation_consumer import ObservationConsumer
 from .signal_publisher import SignalPublisher
 
@@ -49,4 +51,5 @@ async def make_health_app(
 
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/readyz", readyz)
+    app.router.add_get("/metrics", aiohttp_metrics_handler)
     return app

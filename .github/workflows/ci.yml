@@ -196,6 +196,101 @@ jobs:
         run: python -m pytest tests/test_no_hardcoded_values.py -v --tb=short
 
   # ---------------------------------------------------------------------------
+  # Compose stack smoke test — builds, starts, and health-checks all non-GPU
+  # services in a real multi-container environment.
+  # ---------------------------------------------------------------------------
+  compose-smoke:
+    name: Compose stack smoke test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build service images (excluding input-cv)
+        env:
+          RENDERER_BACKEND: stub
+        run: |
+          docker compose build \
+            mosquitto postgres audience-state creative \
+            decision-optimizer player supervisor dashboard-api
+
+      - name: Start compose stack (excluding input-cv and dashboard-ui)
+        env:
+          RENDERER_BACKEND: stub
+        run: |
+          docker compose up -d \
+            mosquitto postgres dashboard-db-migrate \
+            audience-state creative decision-optimizer \
+            player supervisor dashboard-api
+
+      - name: Wait for all services to become healthy (90 s max)
+        run: |
+          echo "Polling service /healthz endpoints..."
+          for attempt in $(seq 1 18); do
+            printf "  attempt %d/18 —" "$attempt"
+            ALL_HEALTHY=true
+            for port in 8080 8081 8082 8090 8091 8004; do
+              if curl -sf "http://localhost:$port/healthz" >/dev/null 2>&1; then
+                printf " %d✓" "$port"
+              else
+                printf " %d✗" "$port"
+                ALL_HEALTHY=false
+              fi
+            done
+            echo ""
+            $ALL_HEALTHY && echo "All services healthy." && exit 0
+            sleep 5
+          done
+          echo "ERROR: services did not become healthy within 90 s" >&2
+          docker compose ps
+          docker compose logs --no-color --tail=50
+          exit 1
+
+      - name: Verify /healthz — all services return {status:ok}
+        run: |
+          declare -A NAMES=(
+            [8080]="player"
+            [8081]="decision-optimizer"
+            [8082]="audience-state"
+            [8090]="creative"
+            [8091]="supervisor"
+            [8004]="dashboard-api"
+          )
+          for port in 8080 8081 8082 8090 8091 8004; do
+            echo "  ${NAMES[$port]} (port $port) /healthz"
+            curl -sf "http://localhost:$port/healthz" \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('status')=='ok', d"
+            echo "    ✓"
+          done
+
+      - name: Verify /metrics — all services expose Prometheus metrics
+        run: |
+          declare -A NAMES=(
+            [8080]="player"
+            [8081]="decision-optimizer"
+            [8082]="audience-state"
+            [8090]="creative"
+            [8091]="supervisor"
+            [8004]="dashboard-api"
+          )
+          for port in 8080 8081 8082 8090 8091 8004; do
+            echo "  ${NAMES[$port]} (port $port) /metrics"
+            curl -sf "http://localhost:$port/metrics" | grep -q "^# HELP" \
+              || { echo "ERROR: no Prometheus metrics on port $port" >&2; exit 1; }
+            echo "    ✓"
+          done
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=100
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  # ---------------------------------------------------------------------------
   # Docker image build validation — catches Dockerfile regressions before hardware
   # ---------------------------------------------------------------------------
   build-images:

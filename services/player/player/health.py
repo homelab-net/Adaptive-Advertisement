@@ -29,6 +29,8 @@ import logging
 
 from aiohttp import web
 
+from adaptive_shared.metrics import aiohttp_metrics_handler
+
 from .state import StateMachine
 
 log = logging.getLogger(__name__)
@@ -126,4 +128,5 @@ async def make_health_app(
     app.router.add_get("/readyz", readyz)
     app.router.add_post("/control/safe-mode", safe_mode_engage)
     app.router.add_delete("/control/safe-mode", safe_mode_clear)
+    app.router.add_get("/metrics", aiohttp_metrics_handler)
     return app
