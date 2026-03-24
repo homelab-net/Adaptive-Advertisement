@@ -2,8 +2,8 @@
 
 *Adaptive Retail Advertising MVP · living execution-state artifact*
 
-**Last updated:** 2026-03-23
-**Status:** Player and decision-optimizer services scaffolded and tested; remaining services not yet started
+**Last updated:** 2026-03-24
+**Status:** Player, decision-optimizer, and audience-state services scaffolded and tested; creative and input-cv not yet started
 
 > Agents must read this document before starting work and update it after any material change. If this snapshot conflicts with an authoritative baseline document, log the conflict in the Change Resolution Matrix rather than silently reconciling it.
 
@@ -63,7 +63,7 @@
 | Service | Status | Notes |
 |---|---|---|
 | input-cv | Not Started | Requires CSI/V4L2 bring-up; `camera-source.schema.json` v1.1 is the config contract |
-| audience-state | Not Started | MQTT subscriber; ICD-2 contract defined |
+| audience-state | Scaffolded | `services/audience-state/` — sliding-window smoothing (ObservationWindow with injectable clock), ICD-2 MQTT consumer with schema validation + privacy enforcement, ICD-3 outbound publisher with self-validation before publish, 63 unit tests passing |
 | decision-optimizer | Scaffolded | `services/decision-optimizer/` — 1 Hz decision loop, rules-first policy engine (JSON config), ICD-3 MQTT signal consumer (aiomqtt), ICD-4 WebSocket server (player gateway), 54 unit tests passing |
 | creative | Not Started | Approved-manifest authority; ICD-5 contract defined |
 | player | Scaffolded | `services/player/` — state machine, command handler (ICD-4), manifest store (ICD-5), stub + mpv renderer, fallback bundle, health endpoints, 61 unit tests passing; RENDERER_BACKEND=stub for CI; mpv wiring complete pending hardware bring-up |
@@ -75,7 +75,7 @@
 
 | Item | Status |
 |---|---|
-| Unit tests | In Progress — 115 tests passing total: player (61), decision-optimizer (54) |
+| Unit tests | In Progress — 178 tests passing total: player (61), decision-optimizer (54), audience-state (63) |
 | Contract tests | Not Started |
 | Integration tests | Not Started |
 | System / recovery evidence | Not Started |
