@@ -1,0 +1,289 @@
+ADAPTIVE RETAIL TARGET END-STATE VISION v1.0
+
+Status
+- Directional future-state vision for design and architecture alignment.
+- Does not expand MVP scope or authorize implementation outside the active baseline.
+- MVP execution, pilot gating, and release claims remain governed by the highest-revision roadmap, ICDs, TRD, V&V plan, and pilot protocol.
+
+1. Purpose
+This document defines the intended post-MVP end state for the Adaptive Retail Advertising System so that the MVP foundation is built on the correct long-term architecture. It describes the “house” the system is intended to become, while preserving the locked MVP constraints already established.
+
+2. Product Vision
+The intended final product is a privacy-first, local-first adaptive signage platform that uses live local audience-state signals and aggregate performance metrics to select among approved creative variants, compare outcomes through controlled A/B testing, and progressively favor the best-performing approved combinations of creative components for current audience conditions.
+
+The system is not intended to become a freeform generative ad engine, a cloud-required adtech platform, or an identity-based targeting system. Its long-term value comes from bounded, explainable, privacy-preserving optimization of approved creative combinations while maintaining appliance-grade playback reliability and operator control.
+
+3. End-State Product Statement
+The final product should be understood as:
+
+A privacy-first adaptive signage appliance and fleet platform that continuously improves approved on-screen advertising through local audience-aware delivery, controlled experimentation, aggregate business metrics, and human-governed optimization, without storing raw imagery, exposing raw frames, or making WAN connectivity a runtime dependency.
+
+4. Permanent Non-Negotiable Constraints
+These rules remain true in MVP and in the final product:
+- All computer-vision inference remains local to the device.
+- No raw image persistence.
+- No raw frame or video egress.
+- No identity recognition, biometric storage, or cross-visit tracking.
+- Playback is a hard dependency; CV, analytics, DB, dashboard, and WAN are soft dependencies.
+- The screen must never go blank.
+- Manual override and safe mode must always exist.
+- Adaptive behavior must remain inside approved policy space.
+- The player may render only approved manifests.
+- WAN is not required for runtime operation.
+- Remote administration remains VPN-only unless later formally revised.
+- Recovery follows restart-ladder logic; blind nightly reboot posture is prohibited.
+
+5. End-State Functional Intent
+5.1 Audience-Aware Delivery
+The system should use local audience-state inputs to influence which approved creative assembly is displayed at a given moment. This includes:
+- Real-time local adaptation using metadata-only audience-state signals.
+- Stable confidence-gated switching.
+- Freeze-on-uncertainty and graceful degradation.
+- Preservation of stable playback behavior when audience confidence is weak, stale, or unavailable.
+
+5.2 Structured Creative Assembly
+The final product should deliver ads through structured, policy-constrained creative assembly rather than freeform generation. This includes:
+- Approved templates.
+- Approved image and design assets.
+- Approved text elements.
+- Approved variant groups.
+- Approved style and emphasis modifiers within defined policy bounds.
+- Deterministic render manifests suitable for offline-safe playback.
+
+5.3 Controlled A/B Testing and Experimentation
+The final product should include disciplined experimentation capabilities, not unconstrained multivariate chaos. This includes:
+- Static-vs-adaptive comparison using the same approved creative library.
+- Variant family comparison inside the same approved policy space.
+- Controlled test windows and documented experiment conditions.
+- Aggregate local metrics for comparing conditions.
+- Promotion or reweighting decisions based on measured results.
+
+The objective is to measure whether adaptive behavior creates a positive directional business signal without increasing support burden or eroding operator trust.
+
+5.4 Measured Self-Optimization
+The final product should move from rules-first decisioning toward bounded optimizer assistance. The optimization target is not “generate the best ad from scratch.” It is:
+
+Select and weight the best-performing approved combination of creative components for a given audience-state context, using local aggregate performance signals and bounded experimentation.
+
+Examples of future optimization surfaces:
+- Template choice.
+- Headline variant.
+- Body or offer variant.
+- CTA variant.
+- Brand-approved style or color modifier.
+- Hold time and switch timing.
+- Rotation weight.
+- Context-conditioned campaign eligibility.
+
+5.5 Human-Governed Control Plane
+The final product remains operator-controlled. It should provide:
+- Upload, review, and approval workflows for assets and variants.
+- Manual approval as the default gate for runtime eligibility.
+- Ability to enable, pause, resume, or restrict adaptive behavior.
+- Safe mode and fallback playlist control.
+- Clear owner-facing analytics and system status.
+- No approval bypass path.
+
+5.6 Business-Usable Analytics
+The analytics surface should remain clear, aggregate, and commercially useful rather than ML-lab oriented. It should support:
+- Impressions and exposure opportunity counts.
+- Dwell and attention-direction proxies.
+- Static-vs-adaptive comparison results.
+- Variant-family performance trends.
+- Campaign and site-level summaries.
+- Reliability, uptime, and support-burden reporting.
+- Explainable reason codes and decision trace summaries suitable for operator review.
+
+5.7 Reliability and Fallback Behavior
+The system is intended to behave as an appliance, not a demo. End-state reliability expectations include:
+- Always-on playback.
+- Offline-safe local asset cache and fallback bundle.
+- No visible blank-screen behavior during normal operation.
+- Controlled switching with commercially acceptable visual smoothness.
+- Player-first recovery before device reboot.
+- Freeze or fallback behavior when CV, decisioning, creative, DB, dashboard, or network layers degrade.
+- Supportable remote diagnosis and recovery without making cloud runtime a requirement.
+
+5.8 Local-First Appliance Operation
+The final product should remain usable as a stand-alone in-store appliance. This means:
+- Local dashboard.
+- Local storage.
+- Local decisioning.
+- Local analytics persistence.
+- Local playback continuity even during WAN outages.
+- Optional VPN-based remote administration and maintenance.
+
+5.9 Fleet and Multi-Site Growth
+The final product may later grow into a fleet layer above local runtime. This includes:
+- Multi-location campaign coordination.
+- Cross-store performance comparison.
+- Fleet health and support visibility.
+- Site, tenant, and device-level analytics rollups.
+- Promotion of approved winning variant families across sites.
+- Staged update and rollout rings.
+
+This layer must remain additive. Cross-site features must not become a runtime dependency for the in-store appliance.
+
+6. End-State Optimization Posture
+The system’s future optimization posture should mature in the following order:
+
+Phase A: Rules-first adaptive delivery
+- Deterministic keep/switch/fallback logic.
+- Explainable decisions.
+- Frozen fallback when uncertain.
+
+Phase B: Controlled pilot experimentation
+- Static-vs-adaptive measurement.
+- Same approved library in both conditions.
+- Minimal, decision-useful metrics.
+
+Phase C: Bounded optimizer assistance
+- Conservative weighting or bandit-assisted ranking of approved variants.
+- Hard caps, cooldowns, and confidence gates.
+- Human review and rollback retained.
+
+Phase D: Continuous bounded improvement
+- Ongoing local reweighting among approved variants.
+- Promotion of stronger performers within policy-approved bounds.
+- Persistent explainability, auditability, and operator control.
+
+7. Target Feature Set Summary
+Top-level future feature areas:
+- Audience-aware delivery.
+- Structured creative assembly.
+- Controlled A/B testing.
+- Measured self-optimization.
+- Human approval and override controls.
+- Aggregate business analytics.
+- Reliability-first playback and fallback behavior.
+- Privacy-preserving local CV.
+- WAN-independent local appliance runtime.
+- Multi-site fleet analytics and campaign coordination.
+
+8. Features Explicitly In Scope for the Final Product Direction
+The following are appropriate future-state features if implemented within the permanent constraints:
+- Local audience-aware switching based on metadata-only state.
+- Approved adaptive text variation within bounded rules.
+- Approved style/color emphasis variation within bounded rules.
+- Controlled A/B testing of approved variants.
+- Static-vs-adaptive comparison reporting.
+- Variant reweighting based on aggregate outcomes.
+- Cross-store comparison of adaptive lift, trend direction, uptime, and support burden.
+- Fleet health views and remote support tooling over VPN.
+- Central approval workspace for multi-site operators.
+- Staged update rollout and rollback by ring.
+- Benchmark-style reporting across sites, campaign families, or business cohorts using aggregate-only analytics.
+
+9. Explicit Non-Goals Even in the Final Product
+The final product is not intended to become:
+- A freeform prompt-based ad generator.
+- A synthetic image generation runtime.
+- An unconstrained multivariate experimentation lab.
+- A cloud-dependent runtime control plane.
+- An identity-based targeting or surveillance platform.
+- A repeat-visitor memory system.
+- A product that exposes raw camera feeds to operators, clients, or remote admins.
+- A product that allows automatic approval bypass or direct unreviewed creative publication.
+
+10. Architectural Implications for MVP Foundation
+Because this is the intended end state, the MVP foundation should already assume:
+- Stable service boundaries.
+- Versioned interface contracts.
+- Canonical business objects for campaigns, templates, variant groups, assets, modifiers, approvals, manifests, sites, and devices.
+- Append-only event logging for decision, playback, health, approval, and experiment events.
+- Aggregate analytics persistence separate from playback-critical paths.
+- Explainable decision traces.
+- Approval workflow as a permanent control surface.
+- Optimizer integration as a bounded layer on top of rules-first logic rather than a future replacement architecture.
+- Fleet-ready identifiers such as tenant_id, site_id, device_id, campaign_id, creative_id, assembly_id, and schema_version.
+
+11. Target Metrics Categories for the Final Product
+The end-state system should measure only what is useful, explainable, and supportable.
+
+11.1 Commercial / optimization metrics
+- Dwell or attention-direction proxies.
+- Variant performance deltas.
+- Adaptive-vs-static directional performance change.
+- Campaign-level trend summaries.
+- Variant-family win/loss trends.
+- Owner acceptance and trust indicators.
+
+11.2 Reliability metrics
+- Playback availability.
+- Visible blank or error-screen time.
+- Controlled switch quality.
+- Time to recover playback.
+- Fallback invocation rate.
+- Service fault and restart patterns.
+
+11.3 Operational metrics
+- Remote triage time.
+- On-site visit avoidance rate.
+- Support burden by site.
+- Update success and rollback outcomes.
+- Camera and mount repeatability observations.
+
+11.4 Privacy and governance metrics
+- Zero retained imagery.
+- Zero raw frame egress.
+- Zero approval bypass events.
+- Audit completeness for approvals, overrides, and recovery actions.
+
+12. Maintenance and Support Notes for the Intended Product
+The final product should remain supportable for a solo founder or very small team. That requires preserving the following maintenance posture:
+
+12.1 Reproducible appliance build
+- Maintain a reproducible base image and deployment stack.
+- Treat the appliance as a managed product image, not an ad hoc install per customer.
+- Keep startup order, health checks, and recovery behavior deterministic.
+
+12.2 Golden image with first-boot provisioning
+- A cloned/golden image approach is acceptable and desirable for scaling deployment.
+- Unique per-device identity must be created or assigned at first boot.
+- Do not clone final SSH host keys, WireGuard credentials, or unique device identity across customers.
+- Default network posture should rely on customer-LAN DHCP rather than baked-in local static IP assumptions.
+
+12.3 VPN-only remote support
+- Founder support should use WireGuard-based remote access rather than public WAN exposure.
+- SSH-over-VPN and tunneled admin workflows are acceptable internal support methods.
+- Remote support tooling must not weaken the privacy boundary or create runtime WAN dependence.
+
+12.4 Update and rollback discipline
+- Updates should be signed, controlled, and rollback-capable.
+- Rollout rings are preferable to broad uncontrolled fleet pushes.
+- Update failure must not strand the device in an unrecoverable or blank-screen state.
+
+12.5 Supportability-first design
+- Operator workflows must be understandable without shell access.
+- Dashboard and install flows should reduce founder intervention.
+- Remote triage should be practical for common faults.
+- Local runtime should continue even when remote admin is unavailable.
+
+12.6 Evidence packaging
+- The product should eventually produce customer-safe proof packs and operator-safe summaries rather than requiring raw engineering logs to explain value or reliability.
+
+13. Design Guidance for Contributors
+Designers and developers should use this document to understand the intended future shape of the product while preserving the locked MVP foundation. The key rule is:
+
+Build the smallest correct foundation now, but build it so the bounded future system can grow on top of it without rewrite.
+
+That means:
+- Avoid convenience choices that create future rebuild traps.
+- Prefer deterministic, typed, and documented interfaces.
+- Favor explainable decisioning over opaque automation.
+- Protect privacy and playback before adding sophistication.
+- Separate business controls, optimization, creative policy, and playback responsibilities cleanly.
+
+14. Final Framing
+The end-state system is best framed as:
+
+A privacy-first adaptive signage platform that continuously tests and improves approved ad variants locally, proves value against a static baseline, preserves operator control and appliance-grade playback, and later scales to explainable multi-site analytics and bounded optimization.
+
+15. Relationship to Other Documents
+This document should remain separate from:
+- The active roadmap, which governs MVP execution order and gates.
+- ICDs and interface addenda, which govern service contracts.
+- The TRD and V&V plan, which govern thresholds and proof.
+- The extract/change-resolution log, which governs traceability of adopted ideas from conversation history.
+
+This document exists to make the long-term destination clear without polluting the baseline execution documents with future-state noise.

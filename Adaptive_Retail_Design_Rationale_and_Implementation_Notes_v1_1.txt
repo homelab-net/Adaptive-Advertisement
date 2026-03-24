@@ -1,0 +1,196 @@
+ADAPTIVE RETAIL ADVERTISING
+Design Rationale and Implementation Notes v1.1
+
+Supporting reference document capturing chat-derived rationale, implementation clarifications, and operational notes.
+This document does not override the active roadmap, ICDs, TRD, V&V, or other authoritative baselines.
+
+EXECUTIVE SUMMARY
+The chat history is useful as a governed reference only for a narrow set of implementation details and rationale that are not yet fully formalized elsewhere. Its main value is preserving golden-image deployment posture, first-boot provisioning requirements, VPN-only remote support workflow details, dashboard privacy rationale, and local dashboard access/security notes. Exploratory pricing, market sizing, and speculative growth content remain archive-only and should not be promoted into the technical baseline.
+
+1. DOCUMENT ROLE AND BOUNDARIES
+
+Purpose:
+Preserve selected, high-value implementation notes from historical project chat so they are not lost between document revisions.
+
+Authority:
+Context and rationale only. When a conflict exists, the newest formal baseline documents remain controlling.
+
+Use case:
+Explain why certain implementation choices were selected, record narrow operational guidance, and identify items that should later be folded into authoritative source documents if approved.
+
+2. EXTRACTION CRITERIA USED
+
+Included only when a chat-derived point met all three conditions:
+- It materially affected build, deployment, privacy, support, or operability.
+- It aligned with current project direction.
+- It was not already fully captured in a higher-authority document.
+
+Excluded when content was exploratory, commercial, speculative, duplicated elsewhere, or too informal to govern implementation without rewrite.
+
+3. CAPTURED NOTES
+
+3.1 Golden image deployment posture
+Why it matters:
+Confirms that cloning a known-good appliance image is the preferred scaling method for field deployment, reducing configuration drift and support burden.
+
+Current status:
+Keep as supporting rationale unless the build process document needs an explicit golden-image section.
+
+Recommended destination:
+Roadmap deployment appendix or manufacturing / provisioning SOP.
+
+3.2 DHCP-by-default local networking
+Why it matters:
+Prevents LAN IP collisions when multiple client devices are deployed from the same image and preserves compatibility with customer-managed routers.
+
+Current status:
+Should remain a stable implementation assumption.
+
+Recommended destination:
+Network / deployment section of authoritative ops documentation.
+
+3.3 First-boot provisioning requirement
+Why it matters:
+Cloned devices must not share credentials or identity material. Each device must generate or receive unique hostname, SSH keys, WireGuard identity, and other device-specific secrets on first boot or commissioning.
+
+Current status:
+High-value note that should become formalized.
+
+Recommended destination:
+Golden image / provisioning SOP and supervisor or installer specification.
+
+3.4 VPN-only remote support workflow
+Why it matters:
+Clarifies the practical support path: device initiates outbound VPN connectivity; operator joins the same private network and performs SSH or tunneled dashboard access without exposing inbound services at the client site.
+
+Current status:
+Architecturally aligned and operationally useful.
+
+Recommended destination:
+Remote support operations guide.
+
+3.5 No raw-feed dashboard posture
+Why it matters:
+Preserves the product's privacy-first claim by ensuring operators and clients see only anonymized diagnostic output rather than raw live video.
+
+Current status:
+Already directionally aligned with baseline, but rationale is worth preserving.
+
+Recommended destination:
+Dashboard privacy notes or security / privacy architecture section.
+
+3.6 Anonymized diagnostic image as sole dashboard visual output
+Why it matters:
+Narrows exposure boundary: the web layer should only receive processed diagnostic imagery or metadata, not a raw camera stream.
+
+Current status:
+Should be reflected as an implementation constraint.
+
+Recommended destination:
+ICD addendum or dashboard-api / input-cv interface note.
+
+3.7 Physical-access vs. privileged-access distinction
+Why it matters:
+Useful for threat modeling and support policy: user-level dashboard access should not expose raw imagery, while privileged shell access remains an insider-risk governance issue rather than a UI leak.
+
+Current status:
+Reference note only; not yet a formal control set.
+
+Recommended destination:
+Security model / threat considerations appendix.
+
+3.8 Local dashboard authentication requirement
+Why it matters:
+If the dashboard is reachable on a customer LAN, unauthenticated access is not acceptable. This is especially important on open, shared, or poorly segmented networks.
+
+Current status:
+High-priority gap. Current architecture direction implies local access under policy, but this note makes explicit that LAN exposure must not bypass login.
+
+Recommended destination:
+ICD-NET revision, dashboard security note, or deployment security baseline.
+
+3.9 Local address discovery convention (mDNS or equivalent)
+Why it matters:
+A predictable local access convention such as a hostname-based reachability pattern improves install simplicity and supportability without requiring technicians to memorize dynamic IPs.
+
+Current status:
+Useful deployment convention, but not yet baseline-critical.
+
+Recommended destination:
+Install / commissioning SOP.
+
+3.10 HTTPS-by-default local dashboard posture
+Why it matters:
+Even when local-only, the dashboard should prefer encrypted transport. A self-signed local certificate posture may be acceptable for MVP commissioning and support if clearly documented.
+
+Current status:
+Implementation note only until formally ratified.
+
+Recommended destination:
+Dashboard deployment note or install / commissioning SOP.
+
+3.11 Open-network exposure warning
+Why it matters:
+If a customer places the appliance on an open guest network or otherwise weak local segment, dashboard exposure risk increases materially even when runtime remains local-first.
+
+Current status:
+Operational guidance that should be preserved.
+
+Recommended destination:
+Operator handoff, install SOP, or security checklist.
+
+3.12 VPS role clarification
+Why it matters:
+Helpful architectural clarification: any VPS or external relay component is support infrastructure only and not part of the client-facing adaptive runtime path.
+
+Current status:
+Lower-priority rationale item because WAN-independent runtime is already a baseline principle.
+
+Recommended destination:
+Remote support guide or network architecture note.
+
+4. NOTES TO PRESERVE VERBATIM IN SUBSTANCE
+
+- Playback remains the hard dependency. Any deployment, support, privacy, or dashboard choice must not jeopardize uninterrupted playback.
+- Golden-image cloning is acceptable, but identity-bearing material must be unique per device.
+- Local client-site networking should assume DHCP unless a customer-specific exception is explicitly configured.
+- Remote administration should continue to assume outbound device connectivity and VPN-only operator access rather than open inbound ports.
+- Dashboard visibility should remain limited to approved diagnostic views and aggregate metadata; raw camera views are out of bounds for normal operation.
+- Any LAN-exposed dashboard must require authentication; local reachability does not imply anonymous access.
+- Local access UX should favor a consistent hostname-based discovery pattern where practical.
+- A VPS, relay, or other remote support component must remain outside the mandatory runtime dependency path.
+
+5. ITEMS EXPLICITLY NOT PROMOTED FROM CHAT HISTORY
+
+- Exploratory pricing tiers, ROI projections, market-rate estimates, and growth forecasts.
+- Speculative product-tier packaging that has not been ratified in current baseline documents.
+- Any performance or memory calculations presented only in chat and not validated in formal test, profiling, or verification documents.
+- Any conversational framing that is persuasive or rhetorical rather than requirement-grade.
+
+6. RECOMMENDED FOLLOW-ON DOCUMENT ACTIONS
+
+Action 1:
+Create a short golden-image / commissioning SOP covering image creation, clone process, first boot, unique identity generation, and post-commission validation.
+
+Action 2:
+Add an explicit remote support workflow note describing WireGuard-only support access, SSH usage, and dashboard tunneling posture.
+
+Action 3:
+Add a dashboard privacy constraint stating that only anonymized diagnostic imagery and approved metadata may be surfaced outside the CV runtime.
+
+Action 4:
+Add a small threat-considerations appendix distinguishing UI exposure risk from privileged insider modification risk.
+
+Action 5:
+Formalize a dashboard local access control requirement stating that any LAN-reachable dashboard must require authentication and should not be exposed anonymously, even on trusted local networks.
+
+Action 6:
+Add an install / commissioning convention for local hostname discovery, certificate handling, and operator warnings for open-network deployments.
+
+7. GOVERNANCE STATEMENT
+
+This document is a controlled supporting reference. It exists to preserve rationale and implementation clarifications extracted from chat history. It should be consulted only after the current authoritative roadmap, interface documents, requirements package, validation package, and approved project directives. When any item in this document is adopted into a higher-authority source, that newer source becomes the controlling record and this document becomes historical context only.
+
+APPENDIX A. MINIMAL EXTRACTION SUMMARY FROM CHAT HISTORY
+
+The historical chat set contained a large amount of exploratory business discussion. Only a minority of that material warranted preservation. The retained portion is concentrated around deployment scaling, first-boot provisioning, remote support posture, privacy-protective dashboard behavior, and dashboard local-access/security clarifications. All remaining commercial exploration and conversational analysis should remain archive-only.

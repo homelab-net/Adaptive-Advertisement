@@ -1,0 +1,608 @@
+Adaptive Retail CSI Camera Rebaseline CRM Delta Pack v1.0
+
+Document purpose
+This document is a consolidated change-resolution and delta pack for the minimum authoritative re-baseline required to change the MVP camera ingest path from RTSP IP camera ingest to CSI/local-device ingest on the Jetson appliance.
+
+Document status
+Guiding change-control and merge artifact. Not authoritative by itself.
+
+Primary use
+Review, approve, and merge section-level changes into the authoritative source set:
+- Consolidated Interface Control Document v1.1
+- Adaptive Retail Golden Roadmap v2.1
+- Pilot Validation Protocol v1.1
+
+Why this document exists
+The current authoritative ICD baseline formalizes ICD-1 as Camera (RTSP server) to DeepStream (RTSP client) and requires an rtsp_url field in camera source configuration. The roadmap requires service work to execute against the current ICD baseline and requires versioned contract updates and conformance testing for interface changes. The pilot protocol prohibits interface or schema drift during the pilot window. Therefore, changing the MVP camera path to CSI/local-device ingest requires a deliberate, versioned re-baseline rather than an informal implementation deviation.
+
+Source basis for this delta pack
+- The current ICD v1.0 defines ICD-1 as Camera (RTSP server) to DeepStream (RTSP client) and requires rtsp_url in the camera source schema. fileciteturn12file6 fileciteturn12file0
+- The roadmap states that service work shall be executed against the current ICD baseline and that interface changes require versioned contract updates and conformance testing. fileciteturn12file3
+- The pilot protocol states that no interface or schema drift is allowed during the pilot window. fileciteturn12file7
+- The broader SAD architecture template explicitly allows Camera to Inference to use either RTSP/RTP or V4L2 local device. fileciteturn12file4
+
+Change summary
+Decision:
+The MVP single-camera pilot baseline is changed from RTSP IP camera ingest to CSI/local-device ingest on the Jetson appliance.
+
+Reason:
+The single-board Ethernet port is reserved for the local router or LAN path. Preserving an RTSP-over-Ethernet camera path would add avoidable network hardware, cost, support burden, and failure points for a one-camera appliance. A local CSI camera path is within the architecture envelope already contemplated by the SAD, while better fitting the locked MVP shape.
+
+Change class
+Major interface baseline update to ICD-1 and dependent execution/pilot references.
+
+Affected authoritative documents
+1. Consolidated Interface Control Document v1.0 -> v1.1
+2. Adaptive Retail Golden Roadmap V2 -> v2.1
+3. Pilot Validation Protocol v1.0 -> v1.1
+
+Out of scope for this delta pack
+- Rewriting unaffected sections
+- Revising TRD thresholds unless later testing proves necessary
+- Reworking downstream metadata contracts unless a CSI-specific timestamp or source-field clarification is required
+- Rewriting the SAD, which already allows CSI/local-device ingest at the template level
+
+============================================================
+SECTION A - CONSOLIDATED ICD v1.0 -> v1.1 DELTAS
+============================================================
+
+Document target
+Consolidated Interface Control Document v1.1
+
+Change ID
+ICD-1-CSI-001
+
+Section reference
+Architecture context / Relevant components
+
+Old language
+"Relevant components (minimal context needed to implement these interfaces): - Camera: IP camera(s) streaming video to the edge network using RTSP. RTSP 2.0 is a standardized control protocol for media streaming sessions. - CV Pipeline (DeepStream on Jetson): DeepStream consumes the RTSP stream, performs inference/tracking, and emits metadata only."
+
+New language
+"Relevant components (minimal context needed to implement these interfaces): - Camera: a single local camera connected directly to the Jetson through the approved MVP hardware interface, currently CSI and exposed to the ingest pipeline as a local video device. - CV Pipeline (DeepStream on Jetson): DeepStream consumes the approved local camera device stream, performs inference/tracking, and emits metadata only."
+
+Reason for change
+The active MVP appliance is being re-baselined from RTSP IP camera ingest to direct local-camera ingest for the single-camera pilot. This removes unnecessary network hardware dependence while remaining inside the architecture envelope already contemplated by the SAD.
+
+Downstream implications
+- Removes implied dependence on IP camera deployment for the MVP baseline
+- Aligns camera prose with the new ICD-1 contract
+- Does not change downstream metadata-only privacy posture
+
+Required conformance updates
+- Update implementation assumptions in input-cv launcher/config loader
+- Add local-device ingest validation tests
+
+------------------------------------------------------------
+
+Change ID
+ICD-1-CSI-002
+
+Section reference
+ICD camera to CV pipeline / Interface name: ICD-1 Camera -> CV Pipeline / Primary purpose / Actors / Transport protocol / Addressing or endpoint form
+
+Old language
+"Interface name: ICD-1 Camera -> CV Pipeline
+Primary purpose: Deliver a continuous video stream from an IP camera to the edge CV pipeline for inference.
+Actors: - Producer: Camera (RTSP server) - Consumer: DeepStream pipeline (RTSP client)
+Transport protocol: - RTSP 2.0 for session control (default).
+Addressing / endpoint form: - RTSP URL (canonical form; exact path is camera-specific): - rtsp://<host>:<port>/<path> - rtsp://<username>:<password>@<host>:<port>/<path>"
+
+New language
+"Interface name: ICD-1 Camera -> CV Pipeline
+Primary purpose: Deliver a continuous video stream from the approved local MVP camera device to the edge CV pipeline for inference.
+Actors: - Producer: Local camera device presented by the Jetson host OS - Consumer: DeepStream pipeline (local-device client)
+Transport protocol: - Local device ingest through the approved host camera interface for the MVP baseline, currently V4L2-compatible local device semantics for CSI-connected capture.
+Addressing / endpoint form: - Local device path and capture parameters, for example: /dev/video0"
+
+Reason for change
+The prior RTSP/IP-camera framing is no longer the MVP baseline. The new baseline uses a camera attached directly to the board and consumed as a local device.
+
+Downstream implications
+- Removes RTSP-only assumptions from input-cv
+- Shifts deployment complexity from network addressing to local device enumeration and capture configuration
+
+Required conformance updates
+- New ingest configuration parser and validation
+- New bring-up checklist for local device path, format, fps, permissions, and startup ordering
+
+------------------------------------------------------------
+
+Change ID
+ICD-1-CSI-003
+
+Section reference
+ICD-1 / Contracted configuration schema (JSON)
+
+Old language
+"required": ["schema_version", "camera_id", "rtsp_url", "enabled"]
+
+"properties": {
+  "schema_version": { "type": "string", "const": "1.0" },
+  "camera_id": { ... },
+  "enabled": { "type": "boolean" },
+  "rtsp_url": {
+    "type": "string",
+    "minLength": 1,
+    "description": "RTSP URL for the camera stream (rtsp://...)."
+  },
+  "transport_preference": { "type": "string", "enum": ["tcp", "udp", "auto"], "default": "auto" },
+  "connect_timeout_ms": { ... },
+  "read_timeout_ms": { ... },
+  "reconnect": { ... }
+}"
+
+New language
+"required": ["schema_version", "camera_id", "source_type", "device_path", "enabled"]
+
+"properties": {
+  "schema_version": { "type": "string", "const": "1.1" },
+  "camera_id": {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 128,
+    "pattern": "^[A-Za-z0-9._:-]+$"
+  },
+  "enabled": { "type": "boolean" },
+  "source_type": {
+    "type": "string",
+    "enum": ["local_v4l2"],
+    "description": "Approved MVP camera source type. v1.1 locks the MVP baseline to local_v4l2 for CSI/local-device ingest."
+  },
+  "device_path": {
+    "type": "string",
+    "minLength": 1,
+    "description": "Host device path for the approved local camera source, for example /dev/video0."
+  },
+  "pixel_format": {
+    "type": "string",
+    "default": "NV12"
+  },
+  "width": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 7680
+  },
+  "height": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 4320
+  },
+  "fps": {
+    "type": "number",
+    "exclusiveMinimum": 0,
+    "maximum": 240
+  },
+  "startup_timeout_ms": {
+    "type": "integer",
+    "minimum": 100,
+    "maximum": 60000,
+    "default": 5000
+  },
+  "read_timeout_ms": {
+    "type": "integer",
+    "minimum": 100,
+    "maximum": 60000,
+    "default": 5000
+  },
+  "reopen": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["enabled", "initial_backoff_ms", "max_backoff_ms"],
+    "properties": {
+      "enabled": { "type": "boolean", "default": true },
+      "initial_backoff_ms": { "type": "integer", "minimum": 100, "maximum": 30000, "default": 500 },
+      "max_backoff_ms": { "type": "integer", "minimum": 1000, "maximum": 300000, "default": 30000 }
+    }
+  }
+}"
+
+Reason for change
+The schema must express the new authoritative camera source contract. Retaining rtsp_url as the required field would preserve the wrong baseline.
+
+Downstream implications
+- input-cv config loaders and validation logic must change
+- deployment tooling must provision local-device parameters rather than network URL secrets
+- some earlier reconnect semantics become reopen semantics for local-device recovery
+
+Required conformance updates
+- JSON schema tests for required fields and invalid configurations
+- Local device startup test and missing-device test
+- Device permission and path existence checks in service startup
+
+------------------------------------------------------------
+
+Change ID
+ICD-1-CSI-004
+
+Section reference
+ICD-1 / Example object
+
+Old language
+"schema_version": "1.0",
+"camera_id": "cam-lobby-01",
+"enabled": true,
+"rtsp_url": "rtsp://user:pass@10.0.10.50:554/Streaming/Channels/101",
+"transport_preference": "tcp",
+"connect_timeout_ms": 5000,
+"read_timeout_ms": 5000,
+"reconnect": { "enabled": true, "initial_backoff_ms": 500, "max_backoff_ms": 30000 }"
+
+New language
+"schema_version": "1.1",
+"camera_id": "cam-main-01",
+"enabled": true,
+"source_type": "local_v4l2",
+"device_path": "/dev/video0",
+"pixel_format": "NV12",
+"width": 1920,
+"height": 1080,
+"fps": 30,
+"startup_timeout_ms": 5000,
+"read_timeout_ms": 5000,
+"reopen": { "enabled": true, "initial_backoff_ms": 500, "max_backoff_ms": 30000 }"
+
+Reason for change
+The example should reinforce the active baseline and remove RTSP/IP-camera assumptions.
+
+Downstream implications
+- Example configs, bring-up docs, and tests should adopt the same baseline example
+
+Required conformance updates
+- Example fixture update in any config validation or CI test assets
+
+------------------------------------------------------------
+
+Change ID
+ICD-1-CSI-005
+
+Section reference
+ICD-1 / Field definitions and semantics
+
+Old language
+"rtsp_url ... The authoritative RTSP URL for the stream; treated as a secret if it embeds credentials."
+"connect_timeout_ms ... Max time allowed for session establishment before failure is declared."
+"reconnect.* ... Controls retry backoff; reconnect is required for resilient streaming."
+
+New language
+"source_type ... Authoritative camera source mode for the MVP baseline. v1.1 locks this to local_v4l2."
+"device_path ... The authoritative local device path used by input-cv to open the approved camera source."
+"startup_timeout_ms ... Max time allowed for the local camera device to become readable before startup failure is declared."
+"reopen.* ... Controls retry backoff when the local device becomes unavailable or stops delivering readable frames."
+
+Reason for change
+Field definitions must match the schema and device semantics.
+
+Downstream implications
+- Service code, test packs, and operator notes must use the new field names consistently
+
+Required conformance updates
+- Field-level validation and documentation checks
+
+------------------------------------------------------------
+
+Change ID
+ICD-1-CSI-006
+
+Section reference
+ICD-1 / Error and failure modes / Retry-backoff-timeouts
+
+Old language
+"Authentication failure (camera rejects credentials). RTSP session negotiation failure (DESCRIBE/SETUP/PLAY failures). Stream stalls / read timeout. Jitter, packet loss, decoder errors. Time drift ... On connect failure: retry with exponential backoff ... On read timeout: treat as transient failure; teardown session and reconnect."
+
+New language
+"Failure modes for the MVP local-camera baseline include: local device missing at startup; device node permission failure; unsupported pixel format or resolution; device read stall; hot-unplug or camera disconnect; intermittent frame timeout; and timestamp inconsistency if the device clock or capture timestamps are unstable.
+
+On startup failure: retry open with exponential backoff within the configured reopen window.
+On read timeout or stall: treat as transient failure; close and reopen the local device.
+If failures exceed a site-defined threshold: degrade gracefully by emitting camera-offline health status in ICD-2 and preserving playback fallback behavior."
+
+Reason for change
+Failure semantics must reflect a local-device camera path rather than an RTSP session.
+
+Downstream implications
+- Supervisor and input-cv health reporting should map local-device failures cleanly into camera-offline state
+
+Required conformance updates
+- Missing-device, stall, and reopen tests
+- Camera disconnect recovery drill
+
+------------------------------------------------------------
+
+Change ID
+ICD-1-CSI-007
+
+Section reference
+ICD-1 / Deployment notes
+
+Old language
+Any deployment notes that assume RTSP/IP camera provisioning and credentials
+
+New language
+"Deployment notes for the MVP baseline:
+- input-cv must start only after the expected local camera device is present or a bounded startup timeout expires.
+- The approved device path must be stable across reboots or be mapped deterministically at startup.
+- Container/runtime access to the local camera device must be explicitly granted.
+- Camera qualification must be tied to one approved camera SKU, one ribbon or adapter configuration, and one mount pattern for repeatable optics and supportability."
+
+Reason for change
+The operational burden shifts from network provisioning to local device enumeration and hardware repeatability.
+
+Downstream implications
+- Provisioning checklist and compose/runtime permissions must change
+- Camera qualification assets should include ribbon/adapter configuration if applicable
+
+Required conformance updates
+- Deterministic startup and reboot persistence tests
+- Container device-access validation
+
+============================================================
+SECTION B - GOLDEN ROADMAP V2 -> v2.1 DELTAS
+============================================================
+
+Document target
+Adaptive Retail Golden Roadmap v2.1
+
+Change ID
+ROADMAP-CSI-001
+
+Section reference
+5. Cross-Reference Alignment Matrix / Consolidated ICD v1.0 row
+
+Old language
+"Consolidated ICD v1.0 ... Locks camera->CV->state->decision->player flow"
+
+New language
+"Consolidated ICD v1.1 ... Locks camera->CV->state->decision->player flow, with the MVP camera baseline updated to CSI/local-device ingest for the single-camera appliance."
+
+Reason for change
+The roadmap should reference the new controlling ICD revision and summarize the baseline change at a high level.
+
+Downstream implications
+- Prevents accidental implementation against superseded ICD-1 assumptions
+
+Required conformance updates
+- None beyond adopting ICD v1.1 as authoritative
+
+------------------------------------------------------------
+
+Change ID
+ROADMAP-CSI-002
+
+Section reference
+6. Phased Execution Roadmap and Go/No-Go Criteria / Phase 1 Vision stack / Definition of Done
+
+Old language
+"Stable ingest; metadata-only output; no image persistence; camera reconnect proven"
+
+New language
+"Stable local-camera ingest; metadata-only output; no image persistence; local-device reopen and recovery proven"
+
+Reason for change
+Phase 1 language should match the new camera path and its recovery semantics.
+
+Downstream implications
+- Phase 1 evidence should focus on local-device bring-up and recovery rather than RTSP reconnect only
+
+Required conformance updates
+- Update build gate evidence wording and test checklist
+
+------------------------------------------------------------
+
+Change ID
+ROADMAP-CSI-003
+
+Section reference
+7. Service Boundaries and Interface Mapping / ICD-1 row
+
+Old language
+"ICD-1 / Camera <-> CV / Stream ingest contract for input-cv / Phase 1 gate input"
+
+New language
+"ICD-1 / Camera <-> CV / Local camera ingest contract for input-cv using the approved CSI/local-device baseline / Phase 1 gate input"
+
+Reason for change
+Clarifies the new MVP baseline without altering the broader contract-driven service model.
+
+Downstream implications
+- Keeps phase-to-interface mapping aligned with the new ICD
+
+Required conformance updates
+- None beyond ICD v1.1 alignment
+
+------------------------------------------------------------
+
+Change ID
+ROADMAP-CSI-004
+
+Section reference
+13. Implementation Checklist for Immediate Use / Item 1
+
+Old language
+"Freeze the current ICD baseline and generate conformance tests for each interface before service-level divergence occurs."
+
+New language
+"Freeze the updated ICD v1.1 baseline and generate conformance tests for each interface before service-level divergence occurs. The single-camera MVP shall implement against the CSI/local-device camera ingest baseline rather than the superseded RTSP ICD-1 baseline."
+
+Reason for change
+The immediate execution checklist should explicitly direct implementation toward the revised baseline.
+
+Downstream implications
+- Reduces ambiguity for AI-assisted or parallel implementation work
+
+Required conformance updates
+- None; this is execution guidance alignment
+
+------------------------------------------------------------
+
+Change ID
+ROADMAP-CSI-005
+
+Section reference
+13. Implementation Checklist for Immediate Use / New item inserted after current item 2 or 3
+
+Old language
+No explicit item exists
+
+New language
+"Qualify the approved CSI camera SKU, ribbon or adapter configuration, mount pattern, and installation SOP before repeat pilots or broader field deployment."
+
+Reason for change
+The roadmap already requires one camera SKU, one mount pattern, and one installation SOP before repeat pilots; the new baseline benefits from explicitly including the ribbon or adapter configuration as part of the repeatable camera hardware stack.
+
+Downstream implications
+- Better install repeatability and lower support burden
+
+Required conformance updates
+- Camera qualification sheet should capture the physical camera stack, not just optics
+
+============================================================
+SECTION C - PILOT VALIDATION PROTOCOL v1.0 -> v1.1 DELTAS
+============================================================
+
+Document target
+Pilot Validation Protocol v1.1
+
+Change ID
+PILOT-CSI-001
+
+Section reference
+Document status
+
+Old language
+"Working implementation baseline following frozen ICD baseline."
+
+New language
+"Working implementation baseline following frozen ICD v1.1 baseline, including the CSI/local-device single-camera ingest path."
+
+Reason for change
+The protocol should declare the correct frozen baseline before pilot planning and execution.
+
+Downstream implications
+- Prevents pilot prep against obsolete RTSP assumptions
+
+Required conformance updates
+- None
+
+------------------------------------------------------------
+
+Change ID
+PILOT-CSI-002
+
+Section reference
+2. Locked pilot scope / Display topology row
+
+Old language
+"One appliance, one customer-provided display, one camera"
+
+New language
+"One appliance, one customer-provided display, one approved local camera connected to the appliance"
+
+Reason for change
+The pilot scope should make the direct-attached camera posture explicit.
+
+Downstream implications
+- Install readiness and site prep become clearer
+
+Required conformance updates
+- None
+
+------------------------------------------------------------
+
+Change ID
+PILOT-CSI-003
+
+Section reference
+3. Entry criteria / Camera readiness row
+
+Old language
+"One camera SKU and one mount pattern qualified"
+
+New language
+"One camera SKU, one ribbon or adapter configuration if applicable, and one mount pattern qualified"
+
+Reason for change
+A CSI-based pilot camera stack may rely on a specific cable or adapter path that materially affects repeatability and supportability.
+
+Downstream implications
+- Camera qualification evidence must capture the full approved hardware stack
+
+Required conformance updates
+- Update camera qualification sheet template
+
+------------------------------------------------------------
+
+Change ID
+PILOT-CSI-004
+
+Section reference
+5. Experimental design / Pilot control rules
+
+Old language
+"No interface or schema drift during the pilot window."
+
+New language
+"No interface or schema drift during the pilot window. ICD v1.1 with the CSI/local-device camera ingest baseline is the frozen pilot interface baseline."
+
+Reason for change
+The protocol should explicitly identify which baseline is frozen for pilot use.
+
+Downstream implications
+- Prevents accidental field substitution of alternate camera paths
+
+Required conformance updates
+- None
+
+------------------------------------------------------------
+
+Change ID
+PILOT-CSI-005
+
+Section reference
+New note under install readiness, calibration day, or appendix guidance
+
+Old language
+No explicit local-device camera install note exists
+
+New language
+"Pilot install and calibration shall verify local device enumeration, approved camera orientation, stable mount, expected field of view, and successful recovery after appliance reboot before the site is considered installed."
+
+Reason for change
+A direct-attached camera path introduces local hardware and boot-order concerns that should be checked explicitly during install.
+
+Downstream implications
+- Install SOP and calibration checklist must include local camera bring-up checks
+
+Required conformance updates
+- Add install drill items for device enumeration and reboot persistence
+
+============================================================
+MERGE INSTRUCTIONS
+============================================================
+
+1. Review and approve each delta item in this pack.
+2. Roll approved language into the authoritative documents:
+   - Consolidated ICD v1.1
+   - Adaptive Retail Golden Roadmap v2.1
+   - Pilot Validation Protocol v1.1
+3. Mark this delta pack as historical traceability once the authoritative revisions are issued.
+4. Do not leave this delta pack as the sole active baseline.
+
+============================================================
+DECISION NOTE
+============================================================
+
+Is this the right anti-bloat approach?
+Yes.
+
+This delta-pack approach minimizes documentation bloat because it:
+- changes only the sections that actually move
+- preserves traceability to the old language
+- avoids rewriting three whole documents before the exact deltas are agreed
+- still respects governance by merging the accepted deltas into formal authoritative revisions afterward
+
+This document should therefore be treated as:
+- the review artifact now
+- not the final authority later
+
+End of document.
