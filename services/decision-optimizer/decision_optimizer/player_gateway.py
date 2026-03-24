@@ -17,6 +17,18 @@ The MVP is a single-device appliance, so one player connection is the normal
 case. The gateway handles multiple connections correctly (broadcast semantics)
 for forward compatibility, but does not require them.
 
+Path enforcement
+----------------
+The handler rejects connections that do not match PLAYER_WS_PATH (default
+"/player/commands") with an immediate close. This prevents accidental coupling
+if other services connect to the same port.
+
+Outbound schema validation
+--------------------------
+_next_command() validates every constructed command against the ICD-4 schema
+before broadcast. This mirrors the audience-state publisher's self-validation
+pattern and catches schema drift early at the producer rather than the consumer.
+
 Send failures
 -------------
 If a send fails on one connection (disconnected mid-broadcast), it is removed
@@ -30,6 +42,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Set
 
+import jsonschema
 import websockets
 import websockets.exceptions
 import websockets.server
@@ -38,12 +51,23 @@ from . import config
 
 log = logging.getLogger(__name__)
 
+_COMMAND_SCHEMA_PATH = (
+    Path(config.CONTRACT_DIR) / "player" / "player-command.schema.json"
+)
+
+
+def _load_command_schema() -> dict:
+    with open(_COMMAND_SCHEMA_PATH) as fh:
+        return json.load(fh)
+
 
 class PlayerGateway:
     def __init__(self) -> None:
         self._connections: Set[websockets.server.WebSocketServerProtocol] = set()
         self._sequence: int = 0
         self._server: Optional[websockets.server.WebSocketServer] = None
+        self._schema: dict = _load_command_schema()
+        self._validator = jsonschema.Draft202012Validator(self._schema)
 
     # ------------------------------------------------------------------
     # Server lifecycle
@@ -74,7 +98,20 @@ class PlayerGateway:
     async def _handler(
         self, ws: websockets.server.WebSocketServerProtocol
     ) -> None:
-        """Accept and hold a player connection until it closes."""
+        """Accept and hold a player connection, or reject non-matching paths."""
+        # Enforce ICD-4 path to prevent stray connections on the same port.
+        # websockets sets ws.path on the server-side protocol object.
+        path = getattr(ws, "path", None)
+        if path and path != config.PLAYER_WS_PATH:
+            log.warning(
+                "rejected connection on unexpected path=%s (expected %s) from %s",
+                path,
+                config.PLAYER_WS_PATH,
+                ws.remote_address,
+            )
+            await ws.close(code=4004, reason="invalid path")
+            return
+
         remote = ws.remote_address
         log.info("player connected: %s", remote)
         self._connections.add(ws)
@@ -151,6 +188,17 @@ class PlayerGateway:
         }
         if payload is not None:
             msg[command_type] = payload
+
+        # Self-validate before broadcast (mirrors audience-state publisher pattern).
+        errors = list(self._validator.iter_errors(msg))
+        if errors:
+            # Roll back sequence increment — command will not be sent.
+            self._sequence -= 1
+            detail = "; ".join(e.message for e in errors[:3])
+            raise ValueError(
+                f"PlayerGateway constructed invalid ICD-4 command type={command_type}: {detail}"
+            )
+
         return json.dumps(msg)
 
     async def _broadcast(
@@ -160,7 +208,11 @@ class PlayerGateway:
             log.debug("broadcast %s: no players connected", command_type)
             return 0
 
-        raw = self._next_command(command_type, payload)
+        try:
+            raw = self._next_command(command_type, payload)
+        except ValueError as exc:
+            log.error("COMMAND VALIDATION FAILED — not broadcast: %s", exc)
+            return 0
         log.info(
             "broadcast command: type=%s seq=%d players=%d",
             command_type,
