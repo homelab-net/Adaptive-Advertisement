@@ -152,3 +152,32 @@ class TestReadyz:
         body = await (await client.get("/readyz")).json()
         assert "total_stored" in body
         assert "approved_active" in body
+
+
+# ---------------------------------------------------------------------------
+# GET /metrics (OBS-003)
+# ---------------------------------------------------------------------------
+
+class TestMetrics:
+    async def test_200_response(self, client):
+        resp = await client.get("/metrics")
+        assert resp.status == 200
+
+    async def test_content_type_prometheus(self, client):
+        resp = await client.get("/metrics")
+        assert "text/plain" in resp.content_type
+
+    async def test_body_contains_help_lines(self, client):
+        resp = await client.get("/metrics")
+        text = await resp.text()
+        assert "# HELP" in text
+
+    async def test_body_contains_type_lines(self, client):
+        resp = await client.get("/metrics")
+        text = await resp.text()
+        assert "# TYPE" in text
+
+    async def test_metrics_available_when_not_ready(self, not_ready_client):
+        """/metrics must be reachable even before readiness flag is set."""
+        resp = await not_ready_client.get("/metrics")
+        assert resp.status == 200

@@ -80,3 +80,35 @@ async def test_status_shows_boot_loop(client):
     resp = await c.get("/status")
     data = await resp.json()
     assert data["services"]["decision-optimizer"]["in_boot_loop"] is True
+
+
+# ── /metrics (OBS-003) ────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_metrics_200(client):
+    c, _ = client
+    resp = await c.get("/metrics")
+    assert resp.status == 200
+
+
+@pytest.mark.asyncio
+async def test_metrics_content_type_prometheus(client):
+    c, _ = client
+    resp = await c.get("/metrics")
+    assert "text/plain" in resp.content_type
+
+
+@pytest.mark.asyncio
+async def test_metrics_body_has_help_lines(client):
+    c, _ = client
+    resp = await c.get("/metrics")
+    text = await resp.text()
+    assert "# HELP" in text
+
+
+@pytest.mark.asyncio
+async def test_metrics_body_has_type_lines(client):
+    c, _ = client
+    resp = await c.get("/metrics")
+    text = await resp.text()
+    assert "# TYPE" in text
