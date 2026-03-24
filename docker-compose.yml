@@ -102,6 +102,9 @@ services:
       - ./services/input-cv/config/camera-source.example.json:/config/camera-source.json:ro
     environment:
       INPUT_CV_CONFIG_PATH: /config/camera-source.json
+      # Simulation mode: NullDriver publishes synthetic observations (no camera needed).
+      # On Jetson with camera: remove this line and uncomment devices below.
+      INPUT_CV_PIPELINE_BACKEND: "null"
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
       MQTT_CLIENT_ID: input-cv-01
@@ -109,7 +112,7 @@ services:
       SITE_ID: site-01
       PIPELINE_ID: pipeline-01
       LOG_LEVEL: INFO
-    # On Jetson with camera attached, uncomment:
+    # On Jetson with camera attached, remove INPUT_CV_PIPELINE_BACKEND above and uncomment:
     # devices:
     #   - /dev/video0:/dev/video0
     depends_on:

@@ -3,7 +3,7 @@
 *Adaptive Retail Advertising MVP · living execution-state artifact*
 
 **Last updated:** 2026-03-24
-**Status:** All services scaffolded and tested; contract test suite (ICD-1 through ICD-8, 310 tests) complete; CI workflow added; integration smoke tests (healthz + ICD-4 e2e) passing; supervisor fault injection tests complete (34 tests); WireGuard provisioning scaffold complete (golden-image ready); requirement traceability matrix added; golden-image hygiene test suite (11 tests) added; input-cv scaffolded with stub pipeline (hardware bring-up pending camera qualification)
+**Status:** All services scaffolded and tested; contract test suite (ICD-1 through ICD-8, 310 tests) complete; CI workflow added; integration smoke tests (healthz + ICD-4 e2e) passing; supervisor fault injection tests complete (34 tests); WireGuard provisioning scaffold complete (golden-image ready); requirement traceability matrix added; golden-image hygiene test suite (11 tests) added; input-cv scaffolded with stub pipeline (hardware bring-up pending camera qualification); **full software simulation mode complete** — `docker compose up --build` now runs end-to-end without camera hardware (NullDriver via INPUT_CV_PIPELINE_BACKEND=null, StubRenderer); ICD-2 field name bug fixed (present/confidence/frames_processed/frames_dropped); sim-cv-injector tool added
 
 > Agents must read this document before starting work and update it after any material change. If this snapshot conflicts with an authoritative baseline document, log the conflict in the Change Resolution Matrix rather than silently reconciling it.
 
@@ -64,7 +64,7 @@
 
 | Service | Status | Notes |
 |---|---|---|
-| input-cv | Scaffolded | `services/input-cv/` — config loader (ICD-1 schema-validated, Pydantic), observation model + builder (privacy-negative: banned keys raise PrivacyViolationError), ICD-2 MQTT publisher (paho-mqtt, MQTTv5, QoS 1), null pipeline driver (stub), DeepStream driver stub, recovery/backoff, health tracker, 81 unit tests passing; V4L2 device open blocked on hardware |
+| input-cv | Scaffolded | `services/input-cv/` — config loader (ICD-1 schema-validated, Pydantic), observation model + builder (privacy-negative: banned keys raise PrivacyViolationError), ICD-2 MQTT publisher (paho-mqtt, MQTTv5, QoS 1), null pipeline driver (stub), DeepStream driver stub, recovery/backoff, health tracker, 81 unit tests passing; **simulation mode: INPUT_CV_PIPELINE_BACKEND=null wired in docker-compose.yml** (default); ICD-2 serialization field names corrected (present/confidence/frames_processed/frames_dropped); DeepStream hardware bring-up pending camera qualification |
 | audience-state | Scaffolded | `services/audience-state/` — sliding-window smoothing (ObservationWindow with injectable clock), ICD-2 MQTT consumer with schema validation + privacy enforcement, ICD-3 outbound publisher with self-validation before publish, 63 unit tests passing |
 | decision-optimizer | Scaffolded | `services/decision-optimizer/` — 1 Hz decision loop, rules-first policy engine (JSON config), ICD-3 MQTT signal consumer (aiomqtt), ICD-4 WebSocket server (player gateway), 54 unit tests passing |
 | creative | Scaffolded | `services/creative/` — ManifestStore (schema validation, approval enforcement, expiry with injectable clock), HTTP API (GET /manifests/{id} with 200/403/404/410, GET /manifests list, /healthz, /readyz), 3 seed manifests (attract/default/group), 46 unit + API tests passing |
@@ -113,8 +113,9 @@
 13. ~~WireGuard provisioning scaffold~~ — Done. `provisioning/wireguard/wg0.conf.template` + `provisioning/scripts/setup-wireguard.sh` + `provisioning/scripts/provision.sh`; golden-image design; zero device-specific hardcoded values.
 14. ~~Requirement traceability matrix~~ — Done. `docs/living/traceability-matrix.md`; all requirements mapped.
 15. ~~Golden-image hygiene test~~ — Done. `tests/test_no_hardcoded_values.py` (11 tests); CI hygiene gate added.
-16. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
-17. Pin JetPack point release after camera qualification result.
-18. Run full `docker compose up --build` on target hardware or CI to validate inter-service network connectivity end-to-end.
-19. Add Prometheus `/metrics` endpoint to each service (OBS-003 gap).
-20. Automate log PII lint test (PRIV-004 gap — `test_log_pii_lint.py`).
+16. ~~Software simulation mode~~ — Done. `INPUT_CV_PIPELINE_BACKEND=null` wired in docker-compose.yml; ICD-2 field name bug fixed; `tools/sim-cv-injector.py` added; `docker compose up --build` now runs full pipeline without camera.
+17. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
+18. Pin JetPack point release after camera qualification result.
+19. On Jetson pilot deploy: set `RENDERER_BACKEND=mpv` and remove `INPUT_CV_PIPELINE_BACKEND=null` + uncomment `/dev/video0` device in docker-compose.yml.
+20. Add Prometheus `/metrics` endpoint to each service (OBS-003 gap).
+21. Automate log PII lint test (PRIV-004 gap — `test_log_pii_lint.py`).
