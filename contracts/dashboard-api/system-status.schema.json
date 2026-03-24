@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://homelab-net.github.io/Adaptive-Advertisement/contracts/dashboard-api/system-status.schema.json",
+  "title": "SystemStatus",
+  "description": "Aggregated appliance health snapshot returned by GET /api/v1/status (ICD-6). Aggregated by dashboard-api from each service's /healthz endpoint. Playback correctness is independent of this endpoint.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sampled_at",
+    "overall",
+    "safe_mode",
+    "services"
+  ],
+  "properties": {
+    "sampled_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp when this snapshot was collected."
+    },
+    "overall": {
+      "type": "string",
+      "enum": ["healthy", "degraded", "critical"],
+      "description": "Rolled-up status. healthy = all services healthy. degraded = ≥1 non-critical service unhealthy. critical = player or dashboard-api unhealthy."
+    },
+    "safe_mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active"],
+      "properties": {
+        "active": { "type": "boolean" },
+        "reason": { "type": ["string", "null"] },
+        "activated_at": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "services": {
+      "type": "object",
+      "description": "Per-service health probes. Keys are service names.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "probed_at"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["healthy", "unhealthy", "unreachable"]
+          },
+          "probed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "latency_ms": {
+            "type": ["integer", "null"],
+            "minimum": 0
+          },
+          "detail": {
+            "type": ["string", "null"]
+          }
+        }
+      }
+    }
+  }
+}

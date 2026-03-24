@@ -29,6 +29,10 @@
 | Change ID | Date | Driver / Type | Summary | Affected Artifacts | Disposition | Owner | Status | Folded Into Rev |
 |---|---|---|---|---|---|---|---|---|
 | CRM-001 |  |  | Template placeholder entry. Replace when first real change is logged. |  |  |  | Open |  |
+<<<<<<< HEAD
+=======
+| CRM-002 | 2026-03-23 | Implementation discovery / Interface ambiguity | ICD-4 player-command schema defines `freeze` command but no corresponding `unfreeze` command. Command description says "stop accepting switch commands until unfrozen" but no unfreezing mechanism exists in the four-command enum. Player scaffold implements pragmatic decision: `activate_creative` in FROZEN state is accepted and lifts the freeze. This is the only recovery path available without a schema change. | `contracts/player/player-command.schema.json`, `services/player/player/state.py` | Needs Clarification — awaiting ICD-4 revision to either add explicit `unfreeze` command or confirm activate_creative-as-unfreeze is intended | Agent | Needs Clarification |  |
+>>>>>>> origin/claude/project-overview-A7Vqt
 
 ## Detailed Entry Template
 

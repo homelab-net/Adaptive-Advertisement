@@ -1,0 +1,8 @@
+# Audience-state service runtime dependencies
+aiomqtt>=2.0,<3.0
+aiohttp>=3.9,<4.0
+jsonschema>=4.21,<5.0
+
+# Test dependencies
+pytest>=8.0
+pytest-asyncio>=0.23

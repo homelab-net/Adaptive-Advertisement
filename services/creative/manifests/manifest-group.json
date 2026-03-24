@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "manifest_id": "manifest-group",
+  "approved_at": "2026-03-24T00:00:00Z",
+  "approved_by": "system-seed",
+  "items": [
+    {
+      "item_id": "group-promo-01",
+      "asset_id": "asset-group-promo",
+      "asset_type": "video",
+      "duration_ms": 25000
+    }
+  ],
+  "policy": {
+    "min_dwell_ms": 10000,
+    "cooldown_ms": 5000,
+    "allow_interruption": true
+  }
+}

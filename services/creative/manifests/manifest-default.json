@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "manifest_id": "manifest-default",
+  "approved_at": "2026-03-24T00:00:00Z",
+  "approved_by": "system-seed",
+  "items": [
+    {
+      "item_id": "default-hero-01",
+      "asset_id": "asset-default-hero",
+      "asset_type": "video",
+      "duration_ms": 20000
+    },
+    {
+      "item_id": "default-cta-01",
+      "asset_id": "asset-default-cta",
+      "asset_type": "image",
+      "duration_ms": 5000
+    }
+  ],
+  "policy": {
+    "min_dwell_ms": 10000,
+    "allow_interruption": true
+  }
+}
