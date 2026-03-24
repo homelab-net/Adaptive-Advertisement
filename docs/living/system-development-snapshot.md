@@ -3,7 +3,7 @@
 *Adaptive Retail Advertising MVP · living execution-state artifact*
 
 **Last updated:** 2026-03-24
-**Status:** Player, decision-optimizer, audience-state, and creative services scaffolded and tested; input-cv blocked on hardware
+**Status:** Player, decision-optimizer, audience-state, creative, dashboard-api, and dashboard-ui scaffolded and tested; input-cv blocked on hardware; supervisor (ICD-8) not yet started
 
 > Agents must read this document before starting work and update it after any material change. If this snapshot conflicts with an authoritative baseline document, log the conflict in the Change Resolution Matrix rather than silently reconciling it.
 
@@ -56,7 +56,9 @@
 | ICD-4: decision → player | `contracts/player/player-command.schema.json` | v1.0 — commands, sequence ordering defined |
 | ICD-5: creative → player | `contracts/creative/creative-manifest.schema.json` | v1.0 — approval fields required |
 | ICD-3: audience-state → decision | `contracts/decision-optimizer/audience-state-signal.schema.json` | v1.0 — smoothed state, stability flags, privacy enforced |
-| ICD-6/7/8: dashboard, postgres, supervisor | Defined in interface addendum | No code-facing schema stubs yet |
+| ICD-6: dashboard-ui ↔ dashboard-api | `contracts/dashboard-api/` (manifest, campaign, audit-event, system-status schemas) | v1.0 — full REST contract implemented |
+| ICD-7: dashboard-api ↔ PostgreSQL | `services/dashboard-api/alembic/` | v1.0 — full async ORM + Alembic migration (SQLAlchemy 2.0) |
+| ICD-8: supervisor | Defined in interface addendum | No code-facing schema stubs yet |
 
 ## 5. Service Status
 
@@ -67,15 +69,16 @@
 | decision-optimizer | Scaffolded | `services/decision-optimizer/` — 1 Hz decision loop, rules-first policy engine (JSON config), ICD-3 MQTT signal consumer (aiomqtt), ICD-4 WebSocket server (player gateway), 54 unit tests passing |
 | creative | Scaffolded | `services/creative/` — ManifestStore (schema validation, approval enforcement, expiry with injectable clock), HTTP API (GET /manifests/{id} with 200/403/404/410, GET /manifests list, /healthz, /readyz), 3 seed manifests (attract/default/group), 46 unit + API tests passing |
 | player | Scaffolded | `services/player/` — state machine, command handler (ICD-4), manifest store (ICD-5), stub + mpv renderer, fallback bundle, health endpoints, 61 unit tests passing; RENDERER_BACKEND=stub for CI; mpv wiring complete pending hardware bring-up |
-| dashboard-api | Not Started | Canonical business-logic write authority |
-| postgres | Not Started | Local storage; schema migrations required |
-| supervisor | Not Started | Restart-ladder and safe-mode logic |
+| dashboard-api | Scaffolded | `services/dashboard-api/` — FastAPI, SQLAlchemy 2.0 async ORM, Alembic migrations; full manifest approval state machine (draft→approved→enabled/disabled/archived), campaigns, assets, safe-mode, audit events, analytics scaffold; 43 tests passing (SQLite/aiosqlite in CI) |
+| dashboard-ui | Scaffolded | `services/dashboard-ui/` — React 18 + Vite + TypeScript SPA; Screenly-inspired design (zinc-900 sidebar, emerald accent); shadcn/ui + Tailwind; 6 pages (System, Manifests, Campaigns, Analytics, Events, Settings); nginx Docker image with /api/* reverse-proxy; build verified (369 kB JS) |
+| postgres | Not Started | Local storage; schema migrations ready in dashboard-api (Alembic) |
+| supervisor | Not Started | Restart-ladder and safe-mode relay (ICD-8) |
 
 ## 6. Verification Status
 
 | Item | Status |
 |---|---|
-| Unit tests | In Progress — 224 tests passing total: player (61), decision-optimizer (54), audience-state (63), creative (46) |
+| Unit tests | In Progress — 267 tests passing total: player (61), decision-optimizer (54), audience-state (63), creative (46), dashboard-api (43) |
 | Contract tests | Not Started |
 | Integration tests | Not Started |
 | System / recovery evidence | Not Started |
@@ -87,12 +90,16 @@
 | Camera SKU qualification | Open — Arducam IMX477 HQ selected as candidate; bring-up on target Jetson not yet verified; blocks JetPack point-release pin |
 | Player not yet scaffolded | **Closed** — player scaffolded 2026-03-23; see `services/player/` |
 | ICD-3 no code-facing schema | **Closed** — `contracts/decision-optimizer/audience-state-signal.schema.json` v1.0 created 2026-03-23 |
-| ICD-6/7/8 no code-facing schemas | Open — dashboard, postgres, supervisor interface stubs not yet created |
+| ICD-6/7 no code — dashboard, postgres | **Closed** — dashboard-api (FastAPI + SQLAlchemy 2.0) and dashboard-ui (React/Vite) scaffolded 2026-03-24 |
+| ICD-8 no code — supervisor | Open — supervisor interface stubs not yet created |
 
 ## 8. Immediate Next Actions
 
 1. ~~Scaffold `player` service with screen-never-blank fallback posture~~ — Done (`services/player/`). CRM-002 logged for freeze/unfreeze schema ambiguity.
 2. ~~Create ICD-3 code-facing schema stub~~ — Done (`contracts/decision-optimizer/audience-state-signal.schema.json` v1.0).
-3. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
-4. Pin JetPack point release after camera qualification result.
-5. Scaffold `input-cv` after camera qualification confirms device bring-up.
+3. ~~Scaffold `dashboard-api` (ICD-6/7)~~ — Done (`services/dashboard-api/`). Full manifest state machine, campaigns, assets, safe-mode, audit log, 43 tests.
+4. ~~Scaffold `dashboard-ui` (ICD-6 client)~~ — Done (`services/dashboard-ui/`). React/Vite SPA, 6 pages, nginx Docker image, build verified.
+5. Scaffold `supervisor` service (ICD-8) — safe-mode relay from dashboard-api to player via ICD-4.
+6. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
+7. Pin JetPack point release after camera qualification result.
+8. Scaffold `input-cv` after camera qualification confirms device bring-up.
