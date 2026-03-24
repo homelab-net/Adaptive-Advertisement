@@ -78,3 +78,19 @@
 | Item | Current status / notes |
 |---|---|
 | Blocker 1 |  |
+| Blocker 2 |  |
+| Risk 1 |  |
+
+## 8. Immediate Next Actions
+
+| Item | Current status / notes |
+|---|---|
+| Priority 1 |  |
+| Priority 2 |  |
+| Priority 3 |  |
+
+## 9. Update Log
+
+| Date / Time | Agent / Author | What changed | Evidence / link note |
+|---|---|---|---|
+|  |  |  |  |
