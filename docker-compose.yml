@@ -1,0 +1,294 @@
+# Adaptive Advertisement — docker-compose
+#
+# Wires all services for local integration testing on a single device.
+# On Jetson Orin Nano the image tags should point to ARM64 builds;
+# this file uses build: directives so `docker compose build` works from source.
+#
+# Build context is always the repo root so all services can reach /contracts/.
+#
+# Usage:
+#   docker compose up --build          # build + start everything
+#   docker compose up --build player   # rebuild and restart one service
+#   docker compose logs -f supervisor  # tail supervisor logs
+#
+# Remote admin via WireGuard only (ICD-NET-1).  No ports are published to
+# 0.0.0.0 by default — change the host-binding if you need LAN access.
+
+name: adaptive-advertisement
+
+# ── Shared volumes ─────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  mosquitto_data:
+  # Shared data volume: manifests + assets read/written by dashboard-api,
+  # creative, and player.
+  app_data:
+
+# ── Internal network ───────────────────────────────────────────────────────
+networks:
+  backend:
+    driver: bridge
+
+# ── Services ───────────────────────────────────────────────────────────────
+services:
+
+  # ── Infrastructure ───────────────────────────────────────────────────────
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    networks: [backend]
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+    ports:
+      - "127.0.0.1:1883:1883"
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-t", "healthcheck", "-n", "-q", "1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks: [backend]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: dashboard
+      POSTGRES_USER: dashboard
+      POSTGRES_PASSWORD: dashboard
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashboard -d dashboard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── One-shot: run Alembic migrations before dashboard-api starts ─────────
+
+  dashboard-db-migrate:
+    build:
+      context: .
+      dockerfile: services/dashboard-api/Dockerfile
+    networks: [backend]
+    volumes:
+      - app_data:/data
+    environment:
+      DASHBOARD_DATABASE_URL: postgresql+asyncpg://dashboard:dashboard@postgres:5432/dashboard
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"]
+    restart: on-failure
+
+  # ── Application services ─────────────────────────────────────────────────
+
+  audience-state:
+    build:
+      context: .
+      dockerfile: services/audience-state/Dockerfile
+    restart: unless-stopped
+    networks: [backend]
+    environment:
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: "1883"
+      MQTT_CLIENT_ID: audience-state-01
+      MQTT_AUDIENCE_STATE_TOPIC: adaptive/v1/default-tenant/site-01/audience-state
+      HEALTH_PORT: "8082"
+      LOG_LEVEL: INFO
+    ports:
+      - "127.0.0.1:8082:8082"
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8082/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  decision-optimizer:
+    build:
+      context: .
+      dockerfile: services/decision-optimizer/Dockerfile
+    restart: unless-stopped
+    networks: [backend]
+    environment:
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: "1883"
+      MQTT_CLIENT_ID: decision-optimizer-01
+      MQTT_AUDIENCE_STATE_TOPIC: adaptive/v1/default-tenant/site-01/audience-state
+      PLAYER_WS_HOST: "0.0.0.0"
+      PLAYER_WS_PORT: "8765"
+      PLAYER_WS_PATH: /player/commands
+      DECISION_LOOP_HZ: "1.0"
+      STALE_SIGNAL_THRESHOLD_MS: "5000"
+      HEALTH_PORT: "8081"
+      LOG_LEVEL: INFO
+    ports:
+      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:8765:8765"
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  player:
+    build:
+      context: .
+      dockerfile: services/player/Dockerfile
+    restart: unless-stopped
+    networks: [backend]
+    volumes:
+      - app_data:/data
+    environment:
+      DECISION_OPTIMIZER_WS_URL: ws://decision-optimizer:8765/player/commands
+      MANIFEST_STORE_PATH: /data/manifests
+      ASSET_CACHE_PATH: /data/assets
+      # Use stub renderer in compose (no display attached); switch to "mpv" on Jetson.
+      RENDERER_BACKEND: stub
+      HEALTH_PORT: "8080"
+      LOG_LEVEL: INFO
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      decision-optimizer:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  creative:
+    build:
+      context: .
+      dockerfile: services/creative/Dockerfile
+    restart: unless-stopped
+    networks: [backend]
+    volumes:
+      - app_data:/data
+    environment:
+      MANIFEST_DIR: /data/manifests
+      HTTP_PORT: "8090"
+      LOG_LEVEL: INFO
+    ports:
+      - "127.0.0.1:8090:8090"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8090/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  dashboard-api:
+    build:
+      context: .
+      dockerfile: services/dashboard-api/Dockerfile
+    restart: unless-stopped
+    networks: [backend]
+    volumes:
+      - app_data:/data
+    environment:
+      DASHBOARD_DATABASE_URL: postgresql+asyncpg://dashboard:dashboard@postgres:5432/dashboard
+      DASHBOARD_HOST: "0.0.0.0"
+      DASHBOARD_PORT: "8004"
+      DASHBOARD_MANIFEST_OUTPUT_DIR: /data/manifests
+      DASHBOARD_ASSET_STORAGE_DIR: /data/assets
+      # Correct downstream health probe URLs (override pydantic defaults).
+      DASHBOARD_PLAYER_HEALTHZ_URL: http://player:8080/healthz
+      DASHBOARD_AUDIENCE_STATE_HEALTHZ_URL: http://audience-state:8082/healthz
+      DASHBOARD_DECISION_OPTIMIZER_HEALTHZ_URL: http://decision-optimizer:8081/healthz
+      DASHBOARD_CREATIVE_HEALTHZ_URL: http://creative:8090/healthz
+      DASHBOARD_LOG_LEVEL: INFO
+    ports:
+      - "127.0.0.1:8004:8004"
+    depends_on:
+      dashboard-db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8004/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  dashboard-ui:
+    build:
+      context: services/dashboard-ui
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks: [backend]
+    ports:
+      # Dashboard is the primary human-facing interface; expose on 127.0.0.1
+      # only. For LAN access, change to "0.0.0.0:8888:80" or use WireGuard.
+      - "127.0.0.1:8888:80"
+    depends_on:
+      dashboard-api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:80/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  supervisor:
+    build:
+      context: .
+      dockerfile: services/supervisor/Dockerfile
+    restart: unless-stopped
+    networks: [backend]
+    volumes:
+      # Docker socket: supervisor issues `docker restart <container>` via CLI.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      HEALTH_POLL_INTERVAL_S: "10"
+      SAFE_MODE_POLL_INTERVAL_S: "15"
+      STORAGE_CHECK_INTERVAL_S: "60"
+      RESTART_THRESHOLD: "5"
+      FAST_FAIL_WINDOW_S: "120"
+      BOOT_LOOP_THRESHOLD: "3"
+      FAILURE_THRESHOLD: "2"
+      HEALTH_PORT: "8091"
+      DASHBOARD_API_URL: http://dashboard-api:8004
+      PLAYER_CONTROL_URL: http://player:8080
+      PLAYER_HEALTHZ_URL: http://player:8080/healthz
+      DECISION_OPTIMIZER_HEALTHZ_URL: http://decision-optimizer:8081/healthz
+      AUDIENCE_STATE_HEALTHZ_URL: http://audience-state:8082/healthz
+      CREATIVE_HEALTHZ_URL: http://creative:8090/healthz
+      DASHBOARD_API_HEALTHZ_URL: http://dashboard-api:8004/healthz
+      # Container names for docker restart (must match `name:` or service names above).
+      PLAYER_CONTAINER: adaptive-advertisement-player-1
+      DECISION_OPTIMIZER_CONTAINER: adaptive-advertisement-decision-optimizer-1
+      AUDIENCE_STATE_CONTAINER: adaptive-advertisement-audience-state-1
+      CREATIVE_CONTAINER: adaptive-advertisement-creative-1
+      DASHBOARD_API_CONTAINER: adaptive-advertisement-dashboard-api-1
+      DOCKER_RESTART_ENABLED: "true"
+      STORAGE_DATA_PATH: /data
+      LOG_LEVEL: INFO
+    ports:
+      - "127.0.0.1:8091:8091"
+    depends_on:
+      player:
+        condition: service_started
+      decision-optimizer:
+        condition: service_started
+      audience-state:
+        condition: service_started
+      creative:
+        condition: service_started
+      dashboard-api:
+        condition: service_started

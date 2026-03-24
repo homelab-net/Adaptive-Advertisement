@@ -54,10 +54,10 @@ AUDIENCE_STATE_HEALTHZ_URL: str = os.environ.get(
     "AUDIENCE_STATE_HEALTHZ_URL", "http://audience-state:8082/healthz"
 )
 CREATIVE_HEALTHZ_URL: str = os.environ.get(
-    "CREATIVE_HEALTHZ_URL", "http://creative:8083/healthz"
+    "CREATIVE_HEALTHZ_URL", "http://creative:8090/healthz"
 )
 DASHBOARD_API_HEALTHZ_URL: str = os.environ.get(
-    "DASHBOARD_API_HEALTHZ_URL", "http://dashboard-api:8000/healthz"
+    "DASHBOARD_API_HEALTHZ_URL", "http://dashboard-api:8004/healthz"
 )
 
 # Docker container names to restart (must match docker-compose service names).
@@ -88,7 +88,8 @@ STORAGE_WARN_PCT: float = float(os.environ.get("STORAGE_WARN_PCT", "80"))
 STORAGE_CRITICAL_PCT: float = float(os.environ.get("STORAGE_CRITICAL_PCT", "90"))
 
 # Health server port for this supervisor service.
-HEALTH_PORT: int = int(os.environ.get("HEALTH_PORT", "8090"))
+# 8091 avoids collision with the creative service (which also defaults to 8090).
+HEALTH_PORT: int = int(os.environ.get("HEALTH_PORT", "8091"))
 
 # HTTP probe timeout (seconds).
 PROBE_TIMEOUT_S: float = float(os.environ.get("PROBE_TIMEOUT_S", "5"))

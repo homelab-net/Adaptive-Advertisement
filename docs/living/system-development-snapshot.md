@@ -103,4 +103,5 @@
 6. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
 7. Pin JetPack point release after camera qualification result.
 8. Scaffold `input-cv` after camera qualification confirms device bring-up.
-9. Write docker-compose.yml to wire all services together for integration testing.
+9. ~~Write docker-compose.yml to wire all services together for integration testing~~ — Done (`docker-compose.yml`). All 8 services + postgres + mosquitto wired; syntax validated.
+10. Run integration smoke test (`docker compose up --build`) on target hardware or CI to validate inter-service connectivity.
