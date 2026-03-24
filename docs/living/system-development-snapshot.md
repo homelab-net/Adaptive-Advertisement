@@ -3,7 +3,7 @@
 *Adaptive Retail Advertising MVP · living execution-state artifact*
 
 **Last updated:** 2026-03-24
-**Status:** Player, decision-optimizer, audience-state, creative, dashboard-api, dashboard-ui, and supervisor scaffolded and tested; integration smoke tests (healthz + ICD-4 e2e) passing; input-cv blocked on hardware
+**Status:** All services scaffolded and tested; contract test suite (ICD-1 through ICD-8, 310 tests) complete; CI workflow added; integration smoke tests (healthz + ICD-4 e2e) passing; input-cv scaffolded with stub pipeline (hardware bring-up pending camera qualification)
 
 > Agents must read this document before starting work and update it after any material change. If this snapshot conflicts with an authoritative baseline document, log the conflict in the Change Resolution Matrix rather than silently reconciling it.
 
@@ -34,7 +34,7 @@
 | MQTT broker | **Locked: Eclipse Mosquitto 2.x** — see `decisions/2026-03-23-mqtt-broker.md` |
 | Storage | 256 GB NVMe pilot default |
 | Display | Customer-provided display is the deployed runtime endpoint; 7-inch HDMI is bench/service accessory only |
-| Container runtime | Not Started |
+| Container runtime | Not Started (docker-compose.yml exists; full `docker compose up --build` needs target hardware or CI with Docker) |
 | WireGuard / remote admin | Direction locked; implementation Not Started |
 
 ## 3. Repo and Workspace Status
@@ -64,7 +64,7 @@
 
 | Service | Status | Notes |
 |---|---|---|
-| input-cv | Not Started | Requires CSI/V4L2 bring-up; `camera-source.schema.json` v1.1 is the config contract |
+| input-cv | Scaffolded | `services/input-cv/` — config loader (ICD-1 schema-validated, Pydantic), observation model + builder (privacy-negative: banned keys raise PrivacyViolationError), ICD-2 MQTT publisher (paho-mqtt, MQTTv5, QoS 1), null pipeline driver (stub), DeepStream driver stub, recovery/backoff, health tracker, 81 unit tests passing; V4L2 device open blocked on hardware |
 | audience-state | Scaffolded | `services/audience-state/` — sliding-window smoothing (ObservationWindow with injectable clock), ICD-2 MQTT consumer with schema validation + privacy enforcement, ICD-3 outbound publisher with self-validation before publish, 63 unit tests passing |
 | decision-optimizer | Scaffolded | `services/decision-optimizer/` — 1 Hz decision loop, rules-first policy engine (JSON config), ICD-3 MQTT signal consumer (aiomqtt), ICD-4 WebSocket server (player gateway), 54 unit tests passing |
 | creative | Scaffolded | `services/creative/` — ManifestStore (schema validation, approval enforcement, expiry with injectable clock), HTTP API (GET /manifests/{id} with 200/403/404/410, GET /manifests list, /healthz, /readyz), 3 seed manifests (attract/default/group), 46 unit + API tests passing |
@@ -78,9 +78,10 @@
 
 | Item | Status |
 |---|---|
-| Unit tests | In Progress — 307 tests passing total: player (61), decision-optimizer (54), audience-state (63), creative (46), dashboard-api (43), supervisor (40) |
-| Contract tests | Not Started |
+| Unit tests | In Progress — 388 tests passing total: input-cv (81), player (61), decision-optimizer (54), audience-state (63), creative (46), dashboard-api (43), supervisor (40) |
+| Contract tests | Complete — 310 tests passing: ICD-1 (38), ICD-2 (46), ICD-3 (44), ICD-4 (42), ICD-5 (38), ICD-6 (82), ICD-8 (20); `tests/contract/` |
 | Integration tests | In Progress — 30 tests passing: healthz smoke (21, all services in-process) + ICD-4 e2e WebSocket (9, player↔decision-optimizer); `tests/integration/` |
+| CI | Complete — `.github/workflows/ci.yml`: contract tests job + per-service unit test matrix (7 services) + integration test job; triggers on push and PR |
 | System / recovery evidence | Not Started |
 
 ## 7. Current Blockers and Open Risks
@@ -100,9 +101,12 @@
 3. ~~Scaffold `dashboard-api` (ICD-6/7)~~ — Done (`services/dashboard-api/`). Full manifest state machine, campaigns, assets, safe-mode, audit log, 43 tests.
 4. ~~Scaffold `dashboard-ui` (ICD-6 client)~~ — Done (`services/dashboard-ui/`). React/Vite SPA, 6 pages, nginx Docker image, build verified.
 5. ~~Scaffold `supervisor` service (ICD-8)~~ — Done. Restart-ladder, safe-mode relay, storage monitor, 40 tests.
-6. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
-7. Pin JetPack point release after camera qualification result.
-8. Scaffold `input-cv` after camera qualification confirms device bring-up.
-9. ~~Write docker-compose.yml to wire all services together for integration testing~~ — Done (`docker-compose.yml`). All 8 services + postgres + mosquitto wired; syntax validated.
-10. ~~Run integration smoke tests~~ — Done (`tests/integration/`). 21 healthz smoke tests + 9 ICD-4 e2e WebSocket tests; 30/30 passing in-process (no Docker, no hardware).
-11. Run full `docker compose up --build` on target hardware or CI to validate inter-service network connectivity end-to-end.
+6. ~~Scaffold `input-cv` service~~ — Done (`services/input-cv/`). Config loader, observation model, privacy enforcement, null/DeepStream drivers, MQTT publisher, 81 tests. V4L2 device open pending hardware.
+7. ~~Write contract test suite (ICD-1 through ICD-8)~~ — Done (`tests/contract/`). 310 tests; privacy invariants, required fields, additionalProperties, enum/pattern/bounds all covered.
+8. ~~Add CI workflow~~ — Done (`.github/workflows/ci.yml`). Contract + per-service unit + integration jobs; triggers on push/PR.
+9. Resolve CRM-002 (ICD-4 freeze/unfreeze ambiguity) — schema or service change needed.
+10. Postgres bring-up: run `alembic upgrade head` against a real postgres instance; add postgres-backed pytest fixture to dashboard-api tests.
+11. Privacy / egress audit test pass: add dedicated negative tests verifying no raw image data in MQTT payload bytes across the full ICD-2 → ICD-3 chain at the integration level.
+12. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
+13. Pin JetPack point release after camera qualification result.
+14. Run full `docker compose up --build` on target hardware or CI to validate inter-service network connectivity end-to-end.
