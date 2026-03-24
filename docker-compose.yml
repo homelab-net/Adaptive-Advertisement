@@ -88,6 +88,31 @@ services:
 
   # ── Application services ─────────────────────────────────────────────────
 
+  input-cv:
+    build:
+      context: .
+      dockerfile: services/input-cv/Dockerfile
+    restart: unless-stopped
+    networks: [backend]
+    volumes:
+      # Mount the camera source config.  On Jetson, replace with a site-specific file.
+      - ./services/input-cv/config/camera-source.example.json:/config/camera-source.json:ro
+    environment:
+      INPUT_CV_CONFIG_PATH: /config/camera-source.json
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_CLIENT_ID: input-cv-01
+      TENANT_ID: default-tenant
+      SITE_ID: site-01
+      PIPELINE_ID: pipeline-01
+      LOG_LEVEL: INFO
+    # On Jetson with camera attached, uncomment:
+    # devices:
+    #   - /dev/video0:/dev/video0
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
   audience-state:
     build:
       context: .
@@ -98,7 +123,13 @@ services:
       MQTT_BROKER_HOST: mosquitto
       MQTT_BROKER_PORT: "1883"
       MQTT_CLIENT_ID: audience-state-01
+      # ICD-2 inbound: must match input-cv's publish topic (cv/v1/observations/{tenant}/{site}/{camera_id})
+      # camera_id here matches the camera_id field in camera-source.example.json
+      MQTT_CV_OBSERVATION_TOPIC: cv/v1/observations/default-tenant/site-01/cam-main-01
       MQTT_AUDIENCE_STATE_TOPIC: adaptive/v1/default-tenant/site-01/audience-state
+      TENANT_ID: default-tenant
+      SITE_ID: site-01
+      CAMERA_ID: cam-main-01
       HEALTH_PORT: "8082"
       LOG_LEVEL: INFO
     ports:
@@ -106,6 +137,8 @@ services:
     depends_on:
       mosquitto:
         condition: service_healthy
+      input-cv:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8082/healthz || exit 1"]
       interval: 15s

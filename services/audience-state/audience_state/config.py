@@ -16,10 +16,10 @@ MQTT_RECONNECT_MAX_BACKOFF_S: float = float(
 )
 
 # ICD-2 inbound: cv-observation from input-cv
-# Format: adaptive/v1/{tenant_id}/{site_id}/{camera_id}/cv-observation
+# Format: cv/v1/observations/{tenant_id}/{site_id}/{camera_id}  (ICD-1 normative namespace)
 MQTT_CV_OBSERVATION_TOPIC: str = os.environ.get(
     "MQTT_CV_OBSERVATION_TOPIC",
-    "adaptive/v1/default-tenant/site-01/cam-01/cv-observation",
+    "cv/v1/observations/default-tenant/site-01/cam-01",
 )
 
 # ICD-3 outbound: audience-state-signal to decision-optimizer
