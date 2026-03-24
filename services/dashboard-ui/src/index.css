@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Content area — light, clean */
+    --background: 0 0% 98%;
+    --foreground: 240 10% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+
+    --border: 240 5% 90%;
+    --input: 240 5% 90%;
+    --ring: 142 71% 45%;
+
+    --primary: 142 71% 45%;         /* emerald-500 — Screenly's green accent */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 10% 20%;
+
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+
+    --accent: 240 5% 94%;
+    --accent-foreground: 240 10% 10%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --radius: 0.5rem;
+
+    /* Sidebar — Screenly dark zinc */
+    --sidebar: 240 6% 10%;          /* zinc-900 equivalent */
+    --sidebar-foreground: 240 5% 90%;
+    --sidebar-muted: 240 4% 46%;
+    --sidebar-active: 240 6% 18%;   /* hover / active item bg */
+    --sidebar-border: 240 6% 16%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  /* Thin scrollbars throughout */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+}
+
+/* Status badge colour map */
+@layer components {
+  .badge-enabled   { @apply bg-emerald-100 text-emerald-800 border border-emerald-200; }
+  .badge-approved  { @apply bg-blue-100 text-blue-800 border border-blue-200; }
+  .badge-draft     { @apply bg-zinc-100 text-zinc-600 border border-zinc-200; }
+  .badge-rejected  { @apply bg-red-100 text-red-700 border border-red-200; }
+  .badge-disabled  { @apply bg-zinc-100 text-zinc-500 border border-zinc-200; }
+  .badge-archived  { @apply bg-zinc-200 text-zinc-400 border border-zinc-300; }
+  .badge-active    { @apply bg-emerald-100 text-emerald-800 border border-emerald-200; }
+  .badge-paused    { @apply bg-amber-100 text-amber-700 border border-amber-200; }
+  .badge-healthy   { @apply bg-emerald-100 text-emerald-800 border border-emerald-200; }
+  .badge-degraded  { @apply bg-amber-100 text-amber-700 border border-amber-200; }
+  .badge-critical  { @apply bg-red-100 text-red-700 border border-red-200; }
+  .badge-unreachable { @apply bg-zinc-100 text-zinc-500 border border-zinc-200; }
+  .badge-unhealthy { @apply bg-red-100 text-red-700 border border-red-200; }
+}
