@@ -27,16 +27,15 @@ import sys
 import aiomqtt
 from aiohttp import web
 
+from adaptive_shared.log_config import setup_logging
+
 from . import config
 from .observation_store import ObservationWindow
 from .observation_consumer import ObservationConsumer
 from .signal_publisher import SignalPublisher
 from .health import make_health_app
 
-logging.basicConfig(
-    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
-    format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
-)
+setup_logging("audience-state", config.LOG_LEVEL)
 log = logging.getLogger(__name__)
 
 

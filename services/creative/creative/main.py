@@ -22,14 +22,13 @@ from pathlib import Path
 
 from aiohttp import web
 
+from adaptive_shared.log_config import setup_logging
+
 from . import config
 from .manifest_store import ManifestStore
 from .api import make_app
 
-logging.basicConfig(
-    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
-    format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
-)
+setup_logging("creative", config.LOG_LEVEL)
 log = logging.getLogger(__name__)
 
 

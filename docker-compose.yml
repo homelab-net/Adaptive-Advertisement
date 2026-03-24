@@ -23,6 +23,9 @@ volumes:
   # Shared data volume: manifests + assets read/written by dashboard-api,
   # creative, and player.
   app_data:
+  # Fallback library: operator-supplied fallback assets for the player.
+  # Drop PNGs / MP4s here; write _selected to pin one.  No image rebuild needed.
+  fallback_library:
 
 # ── Internal network ───────────────────────────────────────────────────────
 networks:
@@ -185,10 +188,15 @@ services:
     networks: [backend]
     volumes:
       - app_data:/data
+      # Fallback asset library — drop PNGs/MP4s here for runtime selection.
+      # Write /data/fallback-library/_selected (filename) to pin a specific asset.
+      - fallback_library:/data/fallback-library
     environment:
       DECISION_OPTIMIZER_WS_URL: ws://decision-optimizer:8765/player/commands
       MANIFEST_STORE_PATH: /data/manifests
       ASSET_CACHE_PATH: /data/assets
+      FALLBACK_LIBRARY_PATH: /data/fallback-library
+      FALLBACK_REFRESH_INTERVAL_S: "60"
       # Use stub renderer in compose (no display attached); switch to "mpv" on Jetson.
       RENDERER_BACKEND: stub
       HEALTH_PORT: "8080"

@@ -30,6 +30,8 @@ import sys
 import aiohttp
 from aiohttp import web
 
+from adaptive_shared.log_config import setup_logging
+
 from . import config
 from .service_table import ManagedService, ServiceState, build_service_table
 from .health_probe import probe
@@ -38,10 +40,7 @@ from .safe_mode_relay import SafeModeRelay
 from .storage_monitor import check_storage
 from .health import make_health_app
 
-logging.basicConfig(
-    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
-    format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
-)
+setup_logging("supervisor", config.LOG_LEVEL)
 log = logging.getLogger(__name__)
 
 

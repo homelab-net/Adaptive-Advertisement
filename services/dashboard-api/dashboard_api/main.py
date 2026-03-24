@@ -27,6 +27,8 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from adaptive_shared.log_config import setup_logging
+
 from .config import settings
 from .health import router as health_router
 from .routers.manifests import router as manifests_router
@@ -35,10 +37,7 @@ from .routers.campaigns import router as campaigns_router
 from .routers.system import router as system_router
 from .routers.analytics import router as analytics_router
 
-logging.basicConfig(
-    level=getattr(logging, settings.log_level, logging.INFO),
-    format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
-)
+setup_logging("dashboard-api", settings.log_level)
 log = logging.getLogger(__name__)
 
 

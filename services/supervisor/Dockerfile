@@ -15,6 +15,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends docker.io \
 
 WORKDIR /app
 
+# Install shared utilities (structured JSON logging — OBS-001)
+COPY services/shared/ /tmp/shared_pkg/
+RUN pip install --no-cache-dir /tmp/shared_pkg && rm -rf /tmp/shared_pkg
+
 COPY services/supervisor/pyproject.toml ./pyproject.toml
 RUN pip install --no-cache-dir "aiohttp>=3.9,<4.0"
 

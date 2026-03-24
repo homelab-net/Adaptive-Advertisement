@@ -2,8 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install shared utilities (structured JSON logging — OBS-001)
+COPY services/shared/ /tmp/shared_pkg/
+RUN pip install --no-cache-dir /tmp/shared_pkg && rm -rf /tmp/shared_pkg
+
 # Install dependencies first (layer cache)
-COPY pyproject.toml ./
+# pyproject.toml copied for reference (alembic env.py uses it for package lookup)
+COPY services/dashboard-api/pyproject.toml ./
 RUN pip install --no-cache-dir \
     fastapi>=0.111 \
     "uvicorn[standard]>=0.29" \
@@ -15,9 +20,9 @@ RUN pip install --no-cache-dir \
     "aiohttp>=3.9" \
     "python-multipart>=0.0.9"
 
-COPY dashboard_api/ ./dashboard_api/
-COPY alembic/ ./alembic/
-COPY alembic.ini ./
+COPY services/dashboard-api/dashboard_api/ ./dashboard_api/
+COPY services/dashboard-api/alembic/ ./alembic/
+COPY services/dashboard-api/alembic.ini ./
 
 # Default data dirs (override via compose volume mounts)
 RUN mkdir -p /data/manifests /data/assets

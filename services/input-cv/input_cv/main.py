@@ -38,12 +38,9 @@ from input_cv.recovery import ReopenLoop
 
 
 def _configure_logging() -> None:
+    from adaptive_shared.log_config import setup_logging
     level = os.environ.get("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S",
-    )
+    setup_logging("input-cv", level)
 
 
 def _build_pipeline_driver(config):

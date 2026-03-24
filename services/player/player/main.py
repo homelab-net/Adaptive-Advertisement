@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from aiohttp import web
+from adaptive_shared.log_config import setup_logging
 
 from . import config
 from .fallback import FallbackBundle, FallbackBundleMissingError
@@ -33,10 +34,7 @@ from .renderer import create_renderer, RendererBase, RendererError, RendererStar
 from .state import StateMachine, TransitionResult, PlayerState
 from .health import make_health_app
 
-logging.basicConfig(
-    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
-    format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
-)
+setup_logging("player", config.LOG_LEVEL)
 log = logging.getLogger(__name__)
 
 
@@ -172,12 +170,31 @@ async def run() -> None:
         on_transition=on_transition,
     )
 
+    # Background task: periodically refresh fallback selection from library
+    async def _fallback_refresh_loop() -> None:
+        interval = config.FALLBACK_REFRESH_INTERVAL_S
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                changed = fallback.refresh()
+            except Exception as exc:
+                log.warning("fallback refresh error: %s", exc)
+                continue
+            if changed and state_machine.state.value in ("FALLBACK", "SAFE_MODE"):
+                log.info(
+                    "fallback asset changed while in %s — updating renderer",
+                    state_machine.state.value,
+                )
+                await renderer.show_fallback(fallback.asset_path)
+
     log.info("player ready — entering command loop")
+    refresh_task = asyncio.create_task(_fallback_refresh_loop(), name="fallback-refresh")
     try:
         await command_handler.run()
     except asyncio.CancelledError:
         log.info("player service shutting down")
     finally:
+        refresh_task.cancel()
         await renderer.stop()
         await runner.cleanup()
         log.info("player service stopped")

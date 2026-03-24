@@ -28,10 +28,15 @@ RUN groupadd -f video \
 
 WORKDIR /app
 
-COPY requirements.txt .
+# Install shared utilities (structured JSON logging — OBS-001)
+COPY services/shared/ /tmp/shared_pkg/
+RUN python3.11 -m pip install --no-cache-dir /tmp/shared_pkg && rm -rf /tmp/shared_pkg
+
+COPY services/input-cv/requirements.txt ./requirements.txt
 RUN python3.11 -m pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy service source (repo-root context — consistent with other services)
+COPY services/input-cv/ ./
 RUN python3.11 -m pip install --no-cache-dir -e .
 
 USER inputcv

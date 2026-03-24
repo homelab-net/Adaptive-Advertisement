@@ -23,6 +23,8 @@ from typing import Optional
 import aiomqtt
 from aiohttp import web
 
+from adaptive_shared.log_config import setup_logging
+
 from . import config
 from .policy import load_policy
 from .signal_consumer import SignalConsumer
@@ -30,10 +32,7 @@ from .player_gateway import PlayerGateway
 from .decision_loop import DecisionLoop
 from .health import make_health_app
 
-logging.basicConfig(
-    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
-    format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
-)
+setup_logging("decision-optimizer", config.LOG_LEVEL)
 log = logging.getLogger(__name__)
 
 
