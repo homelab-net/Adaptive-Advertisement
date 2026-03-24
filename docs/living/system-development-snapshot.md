@@ -3,7 +3,7 @@
 *Adaptive Retail Advertising MVP · living execution-state artifact*
 
 **Last updated:** 2026-03-24
-**Status:** Player, decision-optimizer, audience-state, creative, dashboard-api, dashboard-ui, and supervisor scaffolded and tested; input-cv blocked on hardware
+**Status:** Player, decision-optimizer, audience-state, creative, dashboard-api, dashboard-ui, and supervisor scaffolded and tested; integration smoke tests (healthz + ICD-4 e2e) passing; input-cv blocked on hardware
 
 > Agents must read this document before starting work and update it after any material change. If this snapshot conflicts with an authoritative baseline document, log the conflict in the Change Resolution Matrix rather than silently reconciling it.
 
@@ -80,7 +80,7 @@
 |---|---|
 | Unit tests | In Progress — 307 tests passing total: player (61), decision-optimizer (54), audience-state (63), creative (46), dashboard-api (43), supervisor (40) |
 | Contract tests | Not Started |
-| Integration tests | Not Started |
+| Integration tests | In Progress — 30 tests passing: healthz smoke (21, all services in-process) + ICD-4 e2e WebSocket (9, player↔decision-optimizer); `tests/integration/` |
 | System / recovery evidence | Not Started |
 
 ## 7. Current Blockers and Open Risks
@@ -104,4 +104,5 @@
 7. Pin JetPack point release after camera qualification result.
 8. Scaffold `input-cv` after camera qualification confirms device bring-up.
 9. ~~Write docker-compose.yml to wire all services together for integration testing~~ — Done (`docker-compose.yml`). All 8 services + postgres + mosquitto wired; syntax validated.
-10. Run integration smoke test (`docker compose up --build`) on target hardware or CI to validate inter-service connectivity.
+10. ~~Run integration smoke tests~~ — Done (`tests/integration/`). 21 healthz smoke tests + 9 ICD-4 e2e WebSocket tests; 30/30 passing in-process (no Docker, no hardware).
+11. Run full `docker compose up --build` on target hardware or CI to validate inter-service network connectivity end-to-end.
