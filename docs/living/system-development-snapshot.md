@@ -3,7 +3,7 @@
 *Adaptive Retail Advertising MVP · living execution-state artifact*
 
 **Last updated:** 2026-03-24
-**Status:** All services scaffolded and tested; contract test suite (ICD-1 through ICD-8, 310 tests) complete; CI workflow added; integration smoke tests (healthz + ICD-4 e2e) passing; input-cv scaffolded with stub pipeline (hardware bring-up pending camera qualification)
+**Status:** All services scaffolded and tested; contract test suite (ICD-1 through ICD-8, 310 tests) complete; CI workflow added; integration smoke tests (healthz + ICD-4 e2e) passing; supervisor fault injection tests complete (34 tests); WireGuard provisioning scaffold complete (golden-image ready); requirement traceability matrix added; golden-image hygiene test suite (11 tests) added; input-cv scaffolded with stub pipeline (hardware bring-up pending camera qualification)
 
 > Agents must read this document before starting work and update it after any material change. If this snapshot conflicts with an authoritative baseline document, log the conflict in the Change Resolution Matrix rather than silently reconciling it.
 
@@ -35,7 +35,7 @@
 | Storage | 256 GB NVMe pilot default |
 | Display | Customer-provided display is the deployed runtime endpoint; 7-inch HDMI is bench/service accessory only |
 | Container runtime | Not Started (docker-compose.yml exists; full `docker compose up --build` needs target hardware or CI with Docker) |
-| WireGuard / remote admin | Direction locked; implementation Not Started |
+| WireGuard / remote admin | **Scaffolded** — `provisioning/wireguard/wg0.conf.template` + `provisioning/scripts/setup-wireguard.sh` + `provisioning/scripts/provision.sh`; golden-image design (zero device-specific values hardcoded) |
 
 ## 3. Repo and Workspace Status
 
@@ -78,10 +78,12 @@
 
 | Item | Status |
 |---|---|
-| Unit tests | In Progress — 388 tests passing total: input-cv (81), player (61), decision-optimizer (54), audience-state (63), creative (46), dashboard-api (43), supervisor (40) |
+| Unit tests | In Progress — 422 tests passing total: input-cv (81), player (61), decision-optimizer (54), audience-state (63), creative (46), dashboard-api (43), supervisor (74 — 40 original + 34 fault injection) |
 | Contract tests | Complete — 310 tests passing: ICD-1 (38), ICD-2 (46), ICD-3 (44), ICD-4 (42), ICD-5 (38), ICD-6 (82), ICD-8 (20); `tests/contract/` |
 | Integration tests | In Progress — 50 tests passing: healthz smoke (21) + ICD-4 e2e WebSocket (9) + privacy audit ICD-2→ICD-3 (20); `tests/integration/` |
-| CI | Complete — `.github/workflows/ci.yml`: contract tests job + per-service unit test matrix (7 services) + integration test job; triggers on push and PR |
+| Hygiene tests | Complete — 11 tests passing: `tests/test_no_hardcoded_values.py`; golden-image gate (no secrets, no placeholder tokens, no routable IPs, Pydantic Settings env-override verified) |
+| Traceability matrix | Complete — `docs/living/traceability-matrix.md`; all SYS/PERF/CV/REC/PRIV/OBS/PROV/THRM/ICD requirements mapped with status and evidence |
+| CI | Complete — `.github/workflows/ci.yml`: contract tests + unit test matrix (7 services) + postgres migration job + integration tests + hygiene gate; triggers on push and PR |
 | System / recovery evidence | Not Started |
 
 ## 7. Current Blockers and Open Risks
@@ -104,9 +106,15 @@
 6. ~~Scaffold `input-cv` service~~ — Done (`services/input-cv/`). Config loader, observation model, privacy enforcement, null/DeepStream drivers, MQTT publisher, 81 tests. V4L2 device open pending hardware.
 7. ~~Write contract test suite (ICD-1 through ICD-8)~~ — Done (`tests/contract/`). 310 tests; privacy invariants, required fields, additionalProperties, enum/pattern/bounds all covered.
 8. ~~Add CI workflow~~ — Done (`.github/workflows/ci.yml`). Contract + per-service unit + integration jobs; triggers on push/PR.
-9. Resolve CRM-002 (ICD-4 freeze/unfreeze ambiguity) — schema or service change needed.
-10. Postgres bring-up: run `alembic upgrade head` against a real postgres instance; add postgres-backed pytest fixture to dashboard-api tests.
+9. ~~Resolve CRM-002 (ICD-4 freeze/unfreeze ambiguity)~~ — Done. `activate_creative`-as-unfreeze; schema description updated; CRM-002 closed.
+10. ~~Postgres bring-up~~ — Done. `test_postgres_migration.py` (8 tests); CI postgres job with postgres:16.
 11. ~~Privacy / egress audit test pass~~ — Done (`tests/integration/test_privacy_audit.py`). 20 tests: ICD-2 privacy gate, ICD-3 privacy flag enforcement, egress audit (banned-key + base64 + URL inspection in serialized bytes), schema conformance, stability/freeze propagation.
-12. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
-13. Pin JetPack point release after camera qualification result.
-14. Run full `docker compose up --build` on target hardware or CI to validate inter-service network connectivity end-to-end.
+12. ~~Supervisor fault injection / stress tests~~ — Done (`services/supervisor/tests/test_fault_injection.py`). 34 tests: restart ladder, safe mode gate, recovery, simultaneous failures, storage thresholds, safe-mode independence, timestamp pruning.
+13. ~~WireGuard provisioning scaffold~~ — Done. `provisioning/wireguard/wg0.conf.template` + `provisioning/scripts/setup-wireguard.sh` + `provisioning/scripts/provision.sh`; golden-image design; zero device-specific hardcoded values.
+14. ~~Requirement traceability matrix~~ — Done. `docs/living/traceability-matrix.md`; all requirements mapped.
+15. ~~Golden-image hygiene test~~ — Done. `tests/test_no_hardcoded_values.py` (11 tests); CI hygiene gate added.
+16. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
+17. Pin JetPack point release after camera qualification result.
+18. Run full `docker compose up --build` on target hardware or CI to validate inter-service network connectivity end-to-end.
+19. Add Prometheus `/metrics` endpoint to each service (OBS-003 gap).
+20. Automate log PII lint test (PRIV-004 gap — `test_log_pii_lint.py`).
