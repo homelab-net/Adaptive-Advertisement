@@ -29,7 +29,7 @@ from . import config
 from .fallback import FallbackBundle, FallbackBundleMissingError
 from .manifest_store import ManifestStore
 from .command_handler import CommandHandler
-from .renderer import create_renderer, RendererBase, RendererStartupError
+from .renderer import create_renderer, RendererBase, RendererError, RendererStartupError
 from .state import StateMachine, TransitionResult, PlayerState
 from .health import make_health_app
 
@@ -87,12 +87,20 @@ async def _execute_transition(
         # MVP: play first item. Multi-item sequencing is out of scope for scaffold.
         item = items[0]
         asset_path = str(Path(config.ASSET_CACHE_PATH) / item["asset_id"])
-        await renderer.play_manifest_item(
-            asset_path=asset_path,
-            asset_type=item["asset_type"],
-            duration_ms=item["duration_ms"],
-            loop=item.get("loop", False),
-        )
+        try:
+            await renderer.play_manifest_item(
+                asset_path=asset_path,
+                asset_type=item["asset_type"],
+                duration_ms=item["duration_ms"],
+                loop=item.get("loop", False),
+            )
+        except RendererError as exc:
+            log.error(
+                "renderer failed during play_manifest manifest_id=%s: %s — showing fallback",
+                manifest_id,
+                exc,
+            )
+            await renderer.show_fallback(fallback.asset_path)
 
     elif result.action == "hold":
         # Nothing to do — renderer continues playing current content

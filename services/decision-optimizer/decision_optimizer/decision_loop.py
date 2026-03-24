@@ -165,13 +165,9 @@ class DecisionLoop:
         3. Upstream pipeline is degraded.
         4. Signal's own freeze_decision flag is set.
         """
-        # No signal yet — only freeze if we've passed the stale threshold
+        # No signal ever received — don't freeze on startup; give audience-state
+        # time to boot. Player stays in FALLBACK until the first command arrives.
         if signal is None:
-            if age_ms is None:
-                # Never received any signal — don't freeze immediately
-                return None
-            # age_ms is None when no signal received, but if it's not None
-            # and signal is None, something is inconsistent — be safe
             return None
 
         # Check signal age

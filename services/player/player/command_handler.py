@@ -39,8 +39,9 @@ _COMMAND_SCHEMA_PATH = (
 )
 
 # Maximum number of command_ids retained for idempotency checking.
-# At 10 000 entries the dict stays well under 1 MB.
-_MAX_SEEN_IDS = 10_000
+# Unified to 5 000 across all services (consistent with audience-state
+# and decision-optimizer; well under 1 MB on a single-device appliance).
+_MAX_SEEN_IDS = 5_000
 
 OnTransition = Callable[[TransitionResult], Awaitable[None]]
 

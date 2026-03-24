@@ -221,8 +221,16 @@ class MpvRenderer(RendererBase):
             log.warning("[mpv] terminate timed out — killing")
             self._process.kill()
 
+    def _check_process_alive(self) -> None:
+        """Raise RendererError if mpv has exited unexpectedly."""
+        if self._process is not None and self._process.returncode is not None:
+            raise RendererError(
+                f"mpv process exited unexpectedly with code {self._process.returncode}"
+            )
+
     async def _ipc(self, command: list) -> None:
         """Send a single JSON command to the mpv IPC socket."""
+        self._check_process_alive()
         payload = json.dumps({"command": command}) + "\n"
         try:
             reader, writer = await asyncio.open_unix_connection(self._ipc_path)
@@ -231,7 +239,7 @@ class MpvRenderer(RendererBase):
             writer.close()
             await writer.wait_closed()
         except (OSError, ConnectionRefusedError) as exc:
-            log.error("[mpv] IPC send failed: %s", exc)
+            raise RendererError(f"mpv IPC send failed: {exc}") from exc
 
 
 # ------------------------------------------------------------------

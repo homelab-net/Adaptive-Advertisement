@@ -18,6 +18,7 @@ restart picks up new manifests written by the dashboard-api.
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 from aiohttp import web
 
@@ -36,6 +37,18 @@ async def run() -> None:
     log.info("creative service starting")
 
     store = ManifestStore()
+    manifest_dir_path = Path(config.MANIFEST_DIR)
+    if not manifest_dir_path.exists():
+        log.critical(
+            "STARTUP ABORTED — MANIFEST_DIR does not exist: %s", config.MANIFEST_DIR
+        )
+        sys.exit(1)
+    if not manifest_dir_path.is_dir():
+        log.critical(
+            "STARTUP ABORTED — MANIFEST_DIR is not a directory: %s", config.MANIFEST_DIR
+        )
+        sys.exit(1)
+
     count = store.load_directory(config.MANIFEST_DIR)
     if count == 0:
         log.warning(

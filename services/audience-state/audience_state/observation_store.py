@@ -45,6 +45,17 @@ class ObservationWindow:
         confidence_freeze_threshold: float,
         _time: Optional[Callable[[], float]] = None,
     ) -> None:
+        if window_ms < 100:
+            raise ValueError(f"window_ms must be >= 100 ms, got {window_ms}")
+        if min_stability_observations < 1:
+            raise ValueError(
+                f"min_stability_observations must be >= 1, got {min_stability_observations}"
+            )
+        if not (0.0 <= confidence_freeze_threshold <= 1.0):
+            raise ValueError(
+                f"confidence_freeze_threshold must be in [0.0, 1.0], "
+                f"got {confidence_freeze_threshold}"
+            )
         self._window_ms = window_ms
         self._min_stability = min_stability_observations
         self._conf_threshold = confidence_freeze_threshold
