@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=45"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "input-cv"
+version = "0.1.0"
+description = "Camera ingest, local-device CV inference, and metadata-only ICD-2 MQTT output for the adaptive retail MVP."
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7,<3",
+    "jsonschema>=4.22,<5",
+    "paho-mqtt>=2.0,<3",
+]
+
+[project.optional-dependencies]
+deepstream = [
+    # pyds is provided by the nvcr.io DeepStream container and is not pip-installable
+    # on a standard host. Listed here for documentation only.
+    # "pyds",
+]
+dev = [
+    "pytest>=8.2,<9",
+    "pytest-cov>=5.0,<6",
+    "pytest-timeout>=2.3,<3",
+    "freezegun>=1.5,<2",
+]
+
+[project.scripts]
+input-cv = "input_cv.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["input_cv*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 30
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["input_cv"]
+omit = ["input_cv/pipeline/deepstream_driver.py"]

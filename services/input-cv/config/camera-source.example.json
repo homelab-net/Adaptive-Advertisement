@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.1.0",
+  "camera_id": "cam-main-01",
+  "source_type": "local_v4l2",
+  "device_path": "/dev/video0",
+  "enabled": true,
+  "pixel_format": "NV12",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "startup_timeout_ms": 10000,
+  "read_timeout_ms": 3000,
+  "reopen": {
+    "enabled": true,
+    "initial_backoff_ms": 500,
+    "max_backoff_ms": 10000
+  },
+  "notes": "Front-entry CSI camera. Approved MVP single-camera pilot baseline."
+}

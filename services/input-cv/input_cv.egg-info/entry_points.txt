@@ -1,0 +1,2 @@
+[console_scripts]
+input-cv = input_cv.main:main

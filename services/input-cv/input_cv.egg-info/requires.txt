@@ -1,0 +1,11 @@
+pydantic<3,>=2.7
+jsonschema<5,>=4.22
+paho-mqtt<3,>=2.0
+
+[deepstream]
+
+[dev]
+pytest<9,>=8.2
+pytest-cov<6,>=5.0
+pytest-timeout<3,>=2.3
+freezegun<2,>=1.5
