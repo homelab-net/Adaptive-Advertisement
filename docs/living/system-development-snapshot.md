@@ -3,7 +3,7 @@
 *Adaptive Retail Advertising MVP · living execution-state artifact*
 
 **Last updated:** 2026-03-24
-**Status:** Player, decision-optimizer, and audience-state services scaffolded and tested; creative and input-cv not yet started
+**Status:** Player, decision-optimizer, audience-state, and creative services scaffolded and tested; input-cv blocked on hardware
 
 > Agents must read this document before starting work and update it after any material change. If this snapshot conflicts with an authoritative baseline document, log the conflict in the Change Resolution Matrix rather than silently reconciling it.
 
@@ -65,7 +65,7 @@
 | input-cv | Not Started | Requires CSI/V4L2 bring-up; `camera-source.schema.json` v1.1 is the config contract |
 | audience-state | Scaffolded | `services/audience-state/` — sliding-window smoothing (ObservationWindow with injectable clock), ICD-2 MQTT consumer with schema validation + privacy enforcement, ICD-3 outbound publisher with self-validation before publish, 63 unit tests passing |
 | decision-optimizer | Scaffolded | `services/decision-optimizer/` — 1 Hz decision loop, rules-first policy engine (JSON config), ICD-3 MQTT signal consumer (aiomqtt), ICD-4 WebSocket server (player gateway), 54 unit tests passing |
-| creative | Not Started | Approved-manifest authority; ICD-5 contract defined |
+| creative | Scaffolded | `services/creative/` — ManifestStore (schema validation, approval enforcement, expiry with injectable clock), HTTP API (GET /manifests/{id} with 200/403/404/410, GET /manifests list, /healthz, /readyz), 3 seed manifests (attract/default/group), 46 unit + API tests passing |
 | player | Scaffolded | `services/player/` — state machine, command handler (ICD-4), manifest store (ICD-5), stub + mpv renderer, fallback bundle, health endpoints, 61 unit tests passing; RENDERER_BACKEND=stub for CI; mpv wiring complete pending hardware bring-up |
 | dashboard-api | Not Started | Canonical business-logic write authority |
 | postgres | Not Started | Local storage; schema migrations required |
@@ -75,7 +75,7 @@
 
 | Item | Status |
 |---|---|
-| Unit tests | In Progress — 178 tests passing total: player (61), decision-optimizer (54), audience-state (63) |
+| Unit tests | In Progress — 224 tests passing total: player (61), decision-optimizer (54), audience-state (63), creative (46) |
 | Contract tests | Not Started |
 | Integration tests | Not Started |
 | System / recovery evidence | Not Started |

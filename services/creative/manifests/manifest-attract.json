@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "manifest_id": "manifest-attract",
+  "approved_at": "2026-03-24T00:00:00Z",
+  "approved_by": "system-seed",
+  "items": [
+    {
+      "item_id": "attract-loop-01",
+      "asset_id": "asset-attract-loop",
+      "asset_type": "video",
+      "duration_ms": 30000,
+      "loop": true
+    }
+  ],
+  "policy": {
+    "min_dwell_ms": 0,
+    "allow_interruption": true
+  }
+}
