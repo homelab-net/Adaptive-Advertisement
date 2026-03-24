@@ -149,7 +149,8 @@ async def run() -> None:
 
     # Step 5: health server
     is_ready: list = [False]
-    health_app = await make_health_app(state_machine, is_ready)
+    on_transition_holder: list = [None]  # injected in step 7 after callback is defined
+    health_app = await make_health_app(state_machine, is_ready, on_transition_holder)
     runner = web.AppRunner(health_app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", config.HEALTH_PORT)
@@ -162,6 +163,8 @@ async def run() -> None:
     # Step 7: command loop
     async def on_transition(result: TransitionResult) -> None:
         await _execute_transition(result, renderer, fallback, manifest_store)
+
+    on_transition_holder[0] = on_transition  # expose to supervisor control endpoint (ICD-8)
 
     command_handler = CommandHandler(
         state_machine=state_machine,

@@ -3,7 +3,7 @@
 *Adaptive Retail Advertising MVP · living execution-state artifact*
 
 **Last updated:** 2026-03-24
-**Status:** Player, decision-optimizer, audience-state, creative, dashboard-api, and dashboard-ui scaffolded and tested; input-cv blocked on hardware; supervisor (ICD-8) not yet started
+**Status:** Player, decision-optimizer, audience-state, creative, dashboard-api, dashboard-ui, and supervisor scaffolded and tested; input-cv blocked on hardware
 
 > Agents must read this document before starting work and update it after any material change. If this snapshot conflicts with an authoritative baseline document, log the conflict in the Change Resolution Matrix rather than silently reconciling it.
 
@@ -58,7 +58,7 @@
 | ICD-3: audience-state → decision | `contracts/decision-optimizer/audience-state-signal.schema.json` | v1.0 — smoothed state, stability flags, privacy enforced |
 | ICD-6: dashboard-ui ↔ dashboard-api | `contracts/dashboard-api/` (manifest, campaign, audit-event, system-status schemas) | v1.0 — full REST contract implemented |
 | ICD-7: dashboard-api ↔ PostgreSQL | `services/dashboard-api/alembic/` | v1.0 — full async ORM + Alembic migration (SQLAlchemy 2.0) |
-| ICD-8: supervisor | Defined in interface addendum | No code-facing schema stubs yet |
+| ICD-8: supervisor ↔ managed services | `contracts/supervisor/service-health-report.schema.json` | v1.0 — health report schema; restart-ladder + safe-mode relay implemented |
 
 ## 5. Service Status
 
@@ -72,13 +72,13 @@
 | dashboard-api | Scaffolded | `services/dashboard-api/` — FastAPI, SQLAlchemy 2.0 async ORM, Alembic migrations; full manifest approval state machine (draft→approved→enabled/disabled/archived), campaigns, assets, safe-mode, audit events, analytics scaffold; 43 tests passing (SQLite/aiosqlite in CI) |
 | dashboard-ui | Scaffolded | `services/dashboard-ui/` — React 18 + Vite + TypeScript SPA; Screenly-inspired design (zinc-900 sidebar, emerald accent); shadcn/ui + Tailwind; 6 pages (System, Manifests, Campaigns, Analytics, Events, Settings); nginx Docker image with /api/* reverse-proxy; build verified (369 kB JS) |
 | postgres | Not Started | Local storage; schema migrations ready in dashboard-api (Alembic) |
-| supervisor | Not Started | Restart-ladder and safe-mode relay (ICD-8) |
+| supervisor | Scaffolded | `services/supervisor/` — health-probe loop (all 5 services), restart-ladder (REC-004/006), safe-mode relay dashboard-api→player (ICD-8), storage monitor (REC-005), /healthz /readyz /status endpoints; 40 tests passing |
 
 ## 6. Verification Status
 
 | Item | Status |
 |---|---|
-| Unit tests | In Progress — 267 tests passing total: player (61), decision-optimizer (54), audience-state (63), creative (46), dashboard-api (43) |
+| Unit tests | In Progress — 307 tests passing total: player (61), decision-optimizer (54), audience-state (63), creative (46), dashboard-api (43), supervisor (40) |
 | Contract tests | Not Started |
 | Integration tests | Not Started |
 | System / recovery evidence | Not Started |
@@ -91,7 +91,7 @@
 | Player not yet scaffolded | **Closed** — player scaffolded 2026-03-23; see `services/player/` |
 | ICD-3 no code-facing schema | **Closed** — `contracts/decision-optimizer/audience-state-signal.schema.json` v1.0 created 2026-03-23 |
 | ICD-6/7 no code — dashboard, postgres | **Closed** — dashboard-api (FastAPI + SQLAlchemy 2.0) and dashboard-ui (React/Vite) scaffolded 2026-03-24 |
-| ICD-8 no code — supervisor | Open — supervisor interface stubs not yet created |
+| ICD-8 no code — supervisor | **Closed** — supervisor scaffolded 2026-03-24; restart-ladder, safe-mode relay, storage monitor implemented |
 
 ## 8. Immediate Next Actions
 
@@ -99,7 +99,8 @@
 2. ~~Create ICD-3 code-facing schema stub~~ — Done (`contracts/decision-optimizer/audience-state-signal.schema.json` v1.0).
 3. ~~Scaffold `dashboard-api` (ICD-6/7)~~ — Done (`services/dashboard-api/`). Full manifest state machine, campaigns, assets, safe-mode, audit log, 43 tests.
 4. ~~Scaffold `dashboard-ui` (ICD-6 client)~~ — Done (`services/dashboard-ui/`). React/Vite SPA, 6 pages, nginx Docker image, build verified.
-5. Scaffold `supervisor` service (ICD-8) — safe-mode relay from dashboard-api to player via ICD-4.
+5. ~~Scaffold `supervisor` service (ICD-8)~~ — Done. Restart-ladder, safe-mode relay, storage monitor, 40 tests.
 6. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
 7. Pin JetPack point release after camera qualification result.
 8. Scaffold `input-cv` after camera qualification confirms device bring-up.
+9. Write docker-compose.yml to wire all services together for integration testing.
