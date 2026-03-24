@@ -69,7 +69,7 @@ jobs:
 
           - service: dashboard-api
             path: services/dashboard-api
-            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23 httpx>=0.27 aiosqlite>=0.20"
+            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23 httpx>=0.27 aiosqlite>=0.20 alembic>=1.13"
 
     steps:
       - uses: actions/checkout@v4
@@ -89,6 +89,46 @@ jobs:
         env:
           RENDERER_BACKEND: stub   # player: use stub renderer, not mpv
         run: python -m pytest tests/ -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # dashboard-api postgres migration tests — requires real PostgreSQL
+  # ---------------------------------------------------------------------------
+  dashboard-api-postgres:
+    name: dashboard-api postgres migrations (ICD-7)
+    runs-on: ubuntu-22.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dashboard
+          POSTGRES_PASSWORD: dashboard
+          POSTGRES_DB: dashboard_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dashboard"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dashboard-api and test deps
+        working-directory: services/dashboard-api
+        run: pip install -e "." pytest>=8.0 pytest-asyncio>=0.23 alembic>=1.13 asyncpg>=0.29
+
+      - name: Run postgres migration tests
+        working-directory: services/dashboard-api
+        env:
+          DASHBOARD_POSTGRES_TEST_URL: "postgresql+asyncpg://dashboard:dashboard@localhost:5432/dashboard_test"
+        run: python -m pytest tests/test_postgres_migration.py -v --tb=short
 
   # ---------------------------------------------------------------------------
   # Integration tests — all services installed in-process, no Docker
@@ -127,4 +167,5 @@ jobs:
       - name: Run integration tests
         env:
           RENDERER_BACKEND: stub
+        # Root pyproject.toml sets asyncio_mode=auto required by ICD-4 e2e tests
         run: python -m pytest tests/integration/ -v --tb=short

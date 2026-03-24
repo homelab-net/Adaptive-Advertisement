@@ -29,10 +29,7 @@
 | Change ID | Date | Driver / Type | Summary | Affected Artifacts | Disposition | Owner | Status | Folded Into Rev |
 |---|---|---|---|---|---|---|---|---|
 | CRM-001 |  |  | Template placeholder entry. Replace when first real change is logged. |  |  |  | Open |  |
-<<<<<<< HEAD
-=======
-| CRM-002 | 2026-03-23 | Implementation discovery / Interface ambiguity | ICD-4 player-command schema defines `freeze` command but no corresponding `unfreeze` command. Command description says "stop accepting switch commands until unfrozen" but no unfreezing mechanism exists in the four-command enum. Player scaffold implements pragmatic decision: `activate_creative` in FROZEN state is accepted and lifts the freeze. This is the only recovery path available without a schema change. | `contracts/player/player-command.schema.json`, `services/player/player/state.py` | Needs Clarification — awaiting ICD-4 revision to either add explicit `unfreeze` command or confirm activate_creative-as-unfreeze is intended | Agent | Needs Clarification |  |
->>>>>>> origin/claude/project-overview-A7Vqt
+| CRM-002 | 2026-03-23 | Implementation discovery / Interface ambiguity | ICD-4 player-command schema defines `freeze` command but no corresponding `unfreeze` command. Command description says "stop accepting switch commands until unfrozen" but no unfreezing mechanism exists in the four-command enum. Player scaffold implements pragmatic decision: `activate_creative` in FROZEN state is accepted and lifts the freeze. This is the only recovery path available without a schema change. | `contracts/player/player-command.schema.json`, `services/player/player/state.py` | **Approved** — confirmed `activate_creative`-as-unfreeze is the intended mechanism. Rationale: (1) `freeze` reason codes (`cv_degraded`, `decision_degraded`, `thermal_protection`) all describe transient degradation that resolves when the decision engine can produce a new activation; (2) a separate `unfreeze` command would create a two-step race window (unfrozen but no target manifest) with no never-blank benefit; (3) `activate_creative` semantics ("here is the next creative to play") implicitly confirm the freeze condition has cleared. ICD-4 schema description updated to make this explicit. No new command needed. | Agent | Implemented | ICD-4 schema description updated 2026-03-24 |
 
 ## Detailed Entry Template
 

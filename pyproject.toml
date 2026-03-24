@@ -1,0 +1,9 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[tool.pytest.ini_options]
+# Root-level pytest config — used when running tests/integration/ and
+# tests/contract/ from the repository root.
+asyncio_mode = "auto"
+testpaths = ["tests"]

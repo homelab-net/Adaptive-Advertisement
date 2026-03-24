@@ -80,7 +80,7 @@
 |---|---|
 | Unit tests | In Progress — 388 tests passing total: input-cv (81), player (61), decision-optimizer (54), audience-state (63), creative (46), dashboard-api (43), supervisor (40) |
 | Contract tests | Complete — 310 tests passing: ICD-1 (38), ICD-2 (46), ICD-3 (44), ICD-4 (42), ICD-5 (38), ICD-6 (82), ICD-8 (20); `tests/contract/` |
-| Integration tests | In Progress — 30 tests passing: healthz smoke (21, all services in-process) + ICD-4 e2e WebSocket (9, player↔decision-optimizer); `tests/integration/` |
+| Integration tests | In Progress — 50 tests passing: healthz smoke (21) + ICD-4 e2e WebSocket (9) + privacy audit ICD-2→ICD-3 (20); `tests/integration/` |
 | CI | Complete — `.github/workflows/ci.yml`: contract tests job + per-service unit test matrix (7 services) + integration test job; triggers on push and PR |
 | System / recovery evidence | Not Started |
 
@@ -106,7 +106,7 @@
 8. ~~Add CI workflow~~ — Done (`.github/workflows/ci.yml`). Contract + per-service unit + integration jobs; triggers on push/PR.
 9. Resolve CRM-002 (ICD-4 freeze/unfreeze ambiguity) — schema or service change needed.
 10. Postgres bring-up: run `alembic upgrade head` against a real postgres instance; add postgres-backed pytest fixture to dashboard-api tests.
-11. Privacy / egress audit test pass: add dedicated negative tests verifying no raw image data in MQTT payload bytes across the full ICD-2 → ICD-3 chain at the integration level.
+11. ~~Privacy / egress audit test pass~~ — Done (`tests/integration/test_privacy_audit.py`). 20 tests: ICD-2 privacy gate, ICD-3 privacy flag enforcement, egress audit (banned-key + base64 + URL inspection in serialized bytes), schema conformance, stability/freeze propagation.
 12. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware (see `decisions/2026-03-23-camera-sku-candidate.md`).
 13. Pin JetPack point release after camera qualification result.
 14. Run full `docker compose up --build` on target hardware or CI to validate inter-service network connectivity end-to-end.

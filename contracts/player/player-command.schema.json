@@ -73,7 +73,7 @@
       }
     },
     "freeze": {
-      "description": "Payload for command_type='freeze'. Instructs the player to hold the current creative and stop accepting switch commands until unfrozen.",
+      "description": "Payload for command_type='freeze'. Instructs the player to hold the current creative and stop accepting activate_creative switch commands. The freeze is lifted when the decision-optimizer recovers and sends an activate_creative command — that command implicitly unfreezes the player and switches to the new creative. There is no separate unfreeze command; activate_creative IS the unfreeze.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
