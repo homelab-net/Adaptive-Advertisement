@@ -75,15 +75,15 @@ class TestPolicyEngine:
         eng = self._engine(rules)
         assert eng.evaluate(make_signal(count=2)) == "m-high"
 
-    def test_returns_first_matching_when_tie(self):
-        # Both priority=10 — file order is preserved (stable sort)
+    def test_returns_one_of_tied_rules(self):
+        # Both priority=10, equal weights — both must be reachable
         rules = [
             Rule("first",  priority=10, manifest_id="m-first",  presence_count_gte=1),
             Rule("second", priority=10, manifest_id="m-second", presence_count_gte=1),
         ]
         eng = self._engine(rules)
         result = eng.evaluate(make_signal(count=1))
-        assert result in ("m-first", "m-second")  # stable sort — either is ok
+        assert result in ("m-first", "m-second")
 
     def test_skips_non_matching_rules(self):
         rules = [
@@ -366,3 +366,133 @@ class TestReloadPolicy:
         asyncio.run(loop.reload_policy(policy_v2))
         assert loop._policy is policy_v2
         assert loop._policy.evaluate(make_signal()) == "manifest-v2"
+
+
+# ---------------------------------------------------------------------------
+# Weight field and weighted selection
+# ---------------------------------------------------------------------------
+
+class TestWeightedSelection:
+    def _engine(self, rules: list[Rule]) -> PolicyEngine:
+        return PolicyEngine(PolicyConfig(rules=rules))
+
+    # --- Rule dataclass ---
+
+    def test_rule_default_weight_is_one(self):
+        r = Rule("r", priority=0, manifest_id="m")
+        assert r.weight == 1.0
+
+    def test_rule_accepts_custom_weight(self):
+        r = Rule("r", priority=0, manifest_id="m", weight=0.3)
+        assert r.weight == 0.3
+
+    # --- Single match (no change in behaviour) ---
+
+    def test_single_match_returned_directly(self):
+        rules = [Rule("only", priority=10, manifest_id="m-only", presence_count_gte=1)]
+        eng = self._engine(rules)
+        assert eng.evaluate(make_signal(count=1)) == "m-only"
+
+    def test_single_match_with_weight_still_returned(self):
+        rules = [Rule("r", priority=10, manifest_id="m", weight=0.1, presence_count_gte=1)]
+        eng = self._engine(rules)
+        assert eng.evaluate(make_signal(count=1)) == "m"
+
+    # --- Multiple matches at same priority ---
+
+    def test_both_equal_weight_rules_reachable(self):
+        """With two equal-weight rules, both must be reachable over many evaluations."""
+        rules = [
+            Rule("a", priority=10, manifest_id="m-a", weight=1.0),
+            Rule("b", priority=10, manifest_id="m-b", weight=1.0),
+        ]
+        eng = self._engine(rules)
+        results = {eng.evaluate(make_signal()) for _ in range(200)}
+        assert "m-a" in results
+        assert "m-b" in results
+
+    def test_zero_weight_rule_never_selected(self):
+        """A rule with weight=0 is never selected when competing with weight>0."""
+        rules = [
+            Rule("zero",     priority=10, manifest_id="m-zero",    weight=0.0),
+            Rule("nonzero",  priority=10, manifest_id="m-nonzero", weight=1.0),
+        ]
+        eng = self._engine(rules)
+        results = {eng.evaluate(make_signal()) for _ in range(50)}
+        assert "m-zero" not in results
+        assert "m-nonzero" in results
+
+    def test_lower_weight_fires_less_often_than_higher_weight(self):
+        """
+        With weights 1.0 and 0.25, the 1.0 rule should win ~80% of the time.
+        Test uses a generous margin (>60%) to avoid flakiness.
+        """
+        rules = [
+            Rule("heavy",  priority=10, manifest_id="m-heavy",  weight=1.0),
+            Rule("light",  priority=10, manifest_id="m-light",  weight=0.25),
+        ]
+        eng = self._engine(rules)
+        counts: dict[str, int] = {"m-heavy": 0, "m-light": 0}
+        for _ in range(400):
+            result = eng.evaluate(make_signal())
+            if result:
+                counts[result] = counts.get(result, 0) + 1
+        heavy_pct = counts["m-heavy"] / sum(counts.values())
+        assert heavy_pct > 0.60, f"Expected m-heavy >60% but got {heavy_pct:.1%}"
+
+    def test_only_top_priority_tier_competes(self):
+        """
+        Rules at different priorities: lower-priority rules must NOT compete
+        with the top-priority rule, even if lower-priority has higher weight.
+        """
+        rules = [
+            Rule("high",  priority=20, manifest_id="m-high",  weight=0.1),
+            Rule("low",   priority=10, manifest_id="m-low",   weight=100.0),
+        ]
+        eng = self._engine(rules)
+        for _ in range(50):
+            assert eng.evaluate(make_signal()) == "m-high"
+
+    def test_weight_loaded_from_json_file(self, tmp_path):
+        """weight field in JSON rules file is parsed and used."""
+        rules_data = {
+            "schema_version": "1.0.0",
+            "rules": [
+                {"rule_id": "r-heavy", "priority": 10, "weight": 1.0,
+                 "manifest_id": "m-heavy", "conditions": {}},
+                {"rule_id": "r-light", "priority": 10, "weight": 0.01,
+                 "manifest_id": "m-light", "conditions": {}},
+            ],
+        }
+        p = tmp_path / "weighted.json"
+        p.write_text(json.dumps(rules_data))
+        eng = load_policy(str(p))
+
+        loaded_weights = {r.rule_id: r.weight for r in eng._rules}
+        assert loaded_weights["r-heavy"] == 1.0
+        assert loaded_weights["r-light"] == 0.01
+
+    def test_missing_weight_in_json_defaults_to_one(self, tmp_path):
+        rules_data = {
+            "schema_version": "1.0.0",
+            "rules": [
+                {"rule_id": "r1", "priority": 0, "manifest_id": "m", "conditions": {}},
+            ],
+        }
+        p = tmp_path / "no-weight.json"
+        p.write_text(json.dumps(rules_data))
+        eng = load_policy(str(p))
+        assert eng._rules[0].weight == 1.0
+
+    def test_weighted_selection_ignores_non_matching_rules(self):
+        """
+        Non-matching rules must never appear in the weighted selection pool,
+        even if they have high weight.
+        """
+        rules = [
+            Rule("match",    priority=10, manifest_id="m-match",    weight=1.0, presence_count_gte=1),
+            Rule("no-match", priority=10, manifest_id="m-no-match", weight=9999.0, presence_count_gte=100),
+        ]
+        eng = self._engine(rules)
+        for _ in range(50):
+            assert eng.evaluate(make_signal(count=1)) == "m-match"

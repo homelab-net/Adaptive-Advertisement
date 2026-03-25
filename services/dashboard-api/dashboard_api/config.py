@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     # --- Decision-optimizer admin (policy reload relay) ------------------
     decision_optimizer_admin_url: str = "http://decision-optimizer:8003"
 
+    # --- Rules output (tag-based auto-generated rules) -------------------
+    # Path where dashboard-api writes the generated rules JSON file.
+    # Must match the RULES_FILE env var in the decision-optimizer service
+    # (coordinated via a shared docker-compose volume mount).
+    rules_output_path: str = "/data/rules/generated-rules.json"
+
     # --- Observability ---------------------------------------------------
     log_level: str = "INFO"
 

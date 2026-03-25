@@ -5,6 +5,33 @@ export type CampaignStatus = 'draft' | 'active' | 'paused' | 'archived'
 export type ServiceHealth = 'healthy' | 'unhealthy' | 'unreachable'
 export type OverallHealth = 'healthy' | 'degraded' | 'critical'
 
+// Audience tag taxonomy — must stay in sync with rule_generator.ALL_VALID_TAGS
+export type AudienceTag =
+  // --- Audience ---
+  | 'attract'
+  | 'general'
+  | 'solo_adult'
+  | 'group_adults'
+  | 'adult_with_child'
+  | 'teenager_group'
+  | 'seniors'
+  // --- Time window ---
+  | 'time_morning'
+  | 'time_lunch'
+  | 'time_afternoon'
+  | 'time_happy_hour'
+  | 'time_evening'
+  | 'time_late_night'
+  | 'time_all_day'
+  // --- Occasion ---
+  | 'promo_featured'
+  | 'promo_limited_time'
+  | 'promo_seasonal'
+  // --- Frequency ---
+  | 'freq_primary'
+  | 'freq_recurring'
+  | 'freq_ambient'
+
 export interface Pagination {
   total: number
   page: number
@@ -20,6 +47,7 @@ export interface ManifestSummary {
   title: string
   status: ManifestStatus
   schema_version: string
+  audience_tags: AudienceTag[]
   approved_at: string | null
   enabled_at: string | null
   created_at: string
@@ -30,6 +58,21 @@ export interface ManifestDetail extends ManifestSummary {
   manifest_json: Record<string, unknown> | null
   rejection_reason: string | null
   approved_by: string | null
+}
+
+export interface RulePreview {
+  manifest_id: string
+  audience_tags: AudienceTag[]
+  generated_rules: Record<string, unknown>[]
+}
+
+export interface SyncRulesResult {
+  status: string
+  enabled_manifests: number
+  generated_rules: number
+  has_fallback: boolean
+  optimizer_reloaded: boolean
+  optimizer_detail: string | null
 }
 
 export interface ManifestListResponse {

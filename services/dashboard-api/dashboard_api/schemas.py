@@ -17,7 +17,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+
+from .rule_generator import ALL_VALID_TAGS
 
 
 # ---------------------------------------------------------------------------
@@ -35,6 +37,19 @@ class Pagination(BaseModel):
 # Manifests
 # ---------------------------------------------------------------------------
 
+def _validate_audience_tags(tags: list[str]) -> list[str]:
+    """Validate that all tag keys are from the canonical taxonomy."""
+    invalid = set(tags) - ALL_VALID_TAGS
+    if invalid:
+        raise ValueError(
+            f"Unknown audience tag(s): {sorted(invalid)}. "
+            f"Valid tags are: {sorted(ALL_VALID_TAGS)}"
+        )
+    if len(tags) != len(set(tags)):
+        raise ValueError("Duplicate audience tags are not allowed.")
+    return tags
+
+
 class ManifestIn(BaseModel):
     """Body for POST /api/v1/manifests."""
     manifest_id: str = Field(min_length=1, max_length=128)
@@ -43,6 +58,31 @@ class ManifestIn(BaseModel):
     manifest_json: dict[str, Any] = Field(
         description="Raw ICD-5 creative manifest object."
     )
+    audience_tags: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Operator-assigned audience profile tags. Used for human-readable "
+            "labelling and auto-generating decision rules. "
+            "Must be keys from the canonical tag taxonomy."
+        ),
+    )
+
+    @field_validator("audience_tags")
+    @classmethod
+    def validate_audience_tags(cls, v: list[str]) -> list[str]:
+        return _validate_audience_tags(v)
+
+
+class ManifestTagsUpdate(BaseModel):
+    """Body for PATCH /api/v1/manifests/{manifest_id}/tags."""
+    audience_tags: list[str] = Field(
+        description="Replacement set of audience tags for this manifest.",
+    )
+
+    @field_validator("audience_tags")
+    @classmethod
+    def validate_audience_tags(cls, v: list[str]) -> list[str]:
+        return _validate_audience_tags(v)
 
 
 class ManifestOut(BaseModel):
@@ -60,6 +100,7 @@ class ManifestOut(BaseModel):
     enabled_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    audience_tags: list[str] = Field(default_factory=list)
 
 
 class ManifestSummary(BaseModel):
@@ -75,11 +116,29 @@ class ManifestSummary(BaseModel):
     enabled_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    audience_tags: list[str] = Field(default_factory=list)
 
 
 class ManifestListOut(BaseModel):
     items: list[ManifestSummary]
     pagination: Pagination
+
+
+class RulePreviewOut(BaseModel):
+    """Response for GET /api/v1/manifests/{manifest_id}/rule-preview."""
+    manifest_id: str
+    audience_tags: list[str]
+    generated_rules: list[dict[str, Any]]
+
+
+class SyncRulesOut(BaseModel):
+    """Response for POST /api/v1/manifests/sync-rules."""
+    status: str
+    enabled_manifests: int
+    generated_rules: int
+    has_fallback: bool
+    optimizer_reloaded: bool
+    optimizer_detail: Optional[str] = None
 
 
 class ApproveRequest(BaseModel):

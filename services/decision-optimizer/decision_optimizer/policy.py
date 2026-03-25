@@ -53,6 +53,7 @@ If no rule matches, None is returned and the caller should hold current content.
 """
 import json
 import logging
+import random
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -75,6 +76,11 @@ class Rule:
     rule_id: str
     priority: int
     manifest_id: str
+    # Selection weight — used for weighted random selection when multiple rules
+    # match at the same priority tier.  Default 1.0 gives equal probability.
+    # Values < 1.0 (e.g. 0.3 for reminder rules) make a rule fire less often
+    # than equally-prioritised peers when competing at the same priority level.
+    weight: float = 1.0
     # Presence conditions
     presence_count_gte: Optional[int] = None
     presence_count_lte: Optional[int] = None
@@ -202,19 +208,41 @@ class PolicyEngine:
 
     def evaluate(self, signal: dict) -> Optional[str]:
         """
-        Evaluate the signal against all rules.
-        Returns the manifest_id of the first matching rule, or None if no rule matches.
-        None means the caller should hold current content.
+        Evaluate the signal against all rules and return the selected manifest_id.
+
+        Selection logic:
+        1. Collect all matching rules.
+        2. Find the highest priority among them.
+        3. Filter to only rules at that top priority (the "tier").
+        4. If the tier contains one rule, return it directly (no change in behaviour
+           vs. the previous first-match implementation).
+        5. If the tier contains multiple rules, perform weighted random selection
+           using each rule's weight field.  This enables "sporadic" display:
+           a reminder rule with weight=0.3 competing against a weight=1.0 rule
+           fires roughly 23% of the time (0.3 / 1.3), giving organic variation
+           without requiring a separate scheduling mechanism.
+
+        Returns None if no rule matches — caller should hold current content.
         """
         now_hour = self._now_fn().hour
-        for rule in self._rules:
-            if rule.matches(signal, now_hour=now_hour):
-                log.debug(
-                    "policy match: rule=%s manifest=%s", rule.rule_id, rule.manifest_id
-                )
-                return rule.manifest_id
-        log.debug("policy: no rule matched — holding current content")
-        return None
+        matching = [r for r in self._rules if r.matches(signal, now_hour=now_hour)]
+        if not matching:
+            log.debug("policy: no rule matched — holding current content")
+            return None
+
+        top_priority = matching[0].priority  # _rules pre-sorted descending
+        top_tier = [r for r in matching if r.priority == top_priority]
+
+        if len(top_tier) == 1:
+            chosen = top_tier[0]
+        else:
+            chosen = random.choices(top_tier, weights=[r.weight for r in top_tier], k=1)[0]
+
+        log.debug(
+            "policy match: rule=%s manifest=%s priority=%d weight=%.2f tier_size=%d",
+            chosen.rule_id, chosen.manifest_id, chosen.priority, chosen.weight, len(top_tier),
+        )
+        return chosen.manifest_id
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +276,7 @@ def load_policy(rules_file: str) -> PolicyEngine:
             rule_id=r["rule_id"],
             priority=int(r.get("priority", 0)),
             manifest_id=r["manifest_id"],
+            weight=float(r.get("weight", 1.0)),
             presence_count_gte=cond.get("presence_count_gte"),
             presence_count_lte=cond.get("presence_count_lte"),
             presence_count_eq=cond.get("presence_count_eq"),

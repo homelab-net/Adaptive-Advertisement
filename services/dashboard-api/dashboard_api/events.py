@@ -25,6 +25,8 @@ MANIFEST_REJECTED = "manifest.rejected"
 MANIFEST_ENABLED = "manifest.enabled"
 MANIFEST_DISABLED = "manifest.disabled"
 MANIFEST_ARCHIVED = "manifest.archived"
+MANIFEST_TAGS_UPDATED = "manifest.tags_updated"
+MANIFEST_RULES_SYNCED = "manifest.rules_synced"
 
 CAMPAIGN_CREATED = "campaign.created"
 CAMPAIGN_UPDATED = "campaign.updated"

@@ -5,7 +5,7 @@
  * forwards these to the dashboard-api service on port 8004.
  */
 import type {
-  ManifestDetail, ManifestListResponse,
+  ManifestDetail, ManifestListResponse, AudienceTag, RulePreview, SyncRulesResult,
   AssetDetail, AssetListResponse,
   CampaignDetail, CampaignListResponse,
   SystemStatus, SafeModeInfo,
@@ -44,8 +44,14 @@ export const api = {
       return request<ManifestListResponse>(`/manifests${q.size ? `?${q}` : ''}`)
     },
     get: (id: string) => request<ManifestDetail>(`/manifests/${id}`),
-    create: (body: { manifest_id: string; title: string; schema_version: string; manifest_json: unknown }) =>
+    create: (body: { manifest_id: string; title: string; schema_version: string; manifest_json: unknown; audience_tags?: AudienceTag[] }) =>
       request<ManifestDetail>('/manifests', { method: 'POST', body: JSON.stringify(body) }),
+    updateTags: (id: string, tags: AudienceTag[]) =>
+      request<ManifestDetail>(`/manifests/${id}/tags`, { method: 'PATCH', body: JSON.stringify({ audience_tags: tags }) }),
+    rulePreview: (id: string) =>
+      request<RulePreview>(`/manifests/${id}/rule-preview`),
+    syncRules: () =>
+      request<SyncRulesResult>('/manifests/sync-rules', { method: 'POST' }),
     approve: (id: string, approved_by = 'operator') =>
       request<ManifestDetail>(`/manifests/${id}/approve`, { method: 'POST', body: JSON.stringify({ approved_by }) }),
     reject: (id: string, reason: string, rejected_by = 'operator') =>
