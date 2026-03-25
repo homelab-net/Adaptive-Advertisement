@@ -6,9 +6,13 @@ Requires-Python: >=3.11
 Requires-Dist: pydantic<3,>=2.7
 Requires-Dist: jsonschema<5,>=4.22
 Requires-Dist: paho-mqtt<3,>=2.0
+Requires-Dist: aiohttp<4.0,>=3.9
+Requires-Dist: prometheus_client<1.0,>=0.20
 Provides-Extra: deepstream
 Provides-Extra: dev
 Requires-Dist: pytest<9,>=8.2; extra == "dev"
+Requires-Dist: pytest-asyncio<1.0,>=0.23; extra == "dev"
+Requires-Dist: pytest-aiohttp<2.0,>=1.0; extra == "dev"
 Requires-Dist: pytest-cov<6,>=5.0; extra == "dev"
 Requires-Dist: pytest-timeout<3,>=2.3; extra == "dev"
 Requires-Dist: freezegun<2,>=1.5; extra == "dev"

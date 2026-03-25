@@ -11,6 +11,7 @@ input_cv/config/__init__.py
 input_cv/config/loader.py
 input_cv/config/settings.py
 input_cv/health/__init__.py
+input_cv/health/server.py
 input_cv/health/tracker.py
 input_cv/observation/__init__.py
 input_cv/observation/builder.py
