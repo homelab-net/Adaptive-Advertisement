@@ -78,6 +78,12 @@ class Manifest(Base):
     # Full ICD-5 manifest payload (JSONB on PostgreSQL, TEXT on SQLite)
     manifest_json: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
 
+    # Operator-assigned audience profile tags used to auto-generate decision rules.
+    # Stored as a JSON array of tag keys, e.g. ["adult_with_child", "time_happy_hour"].
+    # NULL is treated as [] (untagged) by the API layer.
+    # No biometric data — these are coarse intent labels only (PRIV-001).
+    audience_tags: Mapped[list | None] = mapped_column(sa.JSON, nullable=True)
+
     rejection_reason: Mapped[str | None] = mapped_column(sa.String(1024), nullable=True)
     approved_by: Mapped[str | None] = mapped_column(sa.String(128), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(

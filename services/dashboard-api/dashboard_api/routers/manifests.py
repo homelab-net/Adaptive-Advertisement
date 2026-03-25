@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,10 +36,13 @@ from ..events import (
     write_event,
     MANIFEST_CREATED, MANIFEST_APPROVED, MANIFEST_REJECTED,
     MANIFEST_ENABLED, MANIFEST_DISABLED, MANIFEST_ARCHIVED,
+    MANIFEST_TAGS_UPDATED, MANIFEST_RULES_SYNCED,
 )
 from ..models import Manifest
+from ..rule_generator import generate_rules_for_manifest, build_rules_file
 from ..schemas import (
     ManifestIn, ManifestOut, ManifestSummary, ManifestListOut,
+    ManifestTagsUpdate, RulePreviewOut, SyncRulesOut,
     ApproveRequest, RejectRequest, Pagination,
 )
 
@@ -182,6 +186,7 @@ async def create_manifest(
         title=body.title,
         schema_version=body.schema_version,
         manifest_json=body.manifest_json,
+        audience_tags=body.audience_tags or [],
         status="draft",
     )
     session.add(m)
@@ -190,7 +195,11 @@ async def create_manifest(
         event_type=MANIFEST_CREATED,
         entity_type="manifest",
         entity_id=body.manifest_id,
-        payload={"title": body.title, "schema_version": body.schema_version},
+        payload={
+            "title": body.title,
+            "schema_version": body.schema_version,
+            "audience_tags": body.audience_tags,
+        },
     )
     await session.commit()
     await session.refresh(m)
@@ -330,6 +339,153 @@ async def disable_manifest(
     await session.commit()
     await session.refresh(m)
     return ManifestOut.model_validate(m)
+
+
+@router.patch("/{manifest_id}/tags", response_model=ManifestOut)
+async def update_manifest_tags(
+    manifest_id: str,
+    body: ManifestTagsUpdate,
+    session: AsyncSession = Depends(get_session),
+) -> ManifestOut:
+    """
+    Update the audience tags on a manifest.
+
+    Allowed in any non-archived status — tags are routing metadata, not content.
+    Changing tags on an enabled manifest takes effect in the decision engine only
+    after the operator triggers POST /api/v1/manifests/sync-rules.
+    """
+    m = await _get_manifest_or_404(manifest_id, session)
+    if m.status == "archived":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot update tags on archived manifest '{manifest_id}'.",
+        )
+
+    old_tags = list(m.audience_tags or [])
+    m.audience_tags = body.audience_tags
+    m.updated_at = datetime.now(timezone.utc)
+
+    await write_event(
+        session,
+        event_type=MANIFEST_TAGS_UPDATED,
+        entity_type="manifest",
+        entity_id=manifest_id,
+        payload={"old_tags": old_tags, "new_tags": body.audience_tags},
+    )
+    await session.commit()
+    await session.refresh(m)
+    return ManifestOut.model_validate(m)
+
+
+@router.get("/{manifest_id}/rule-preview", response_model=RulePreviewOut)
+async def get_rule_preview(
+    manifest_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> RulePreviewOut:
+    """
+    Return the decision rules that would be generated from this manifest's
+    current audience_tags.  Read-only — does not write anything.
+
+    Use this to review what will happen before calling sync-rules.
+    """
+    m = await _get_manifest_or_404(manifest_id, session)
+    rules = generate_rules_for_manifest(m)
+    return RulePreviewOut(
+        manifest_id=manifest_id,
+        audience_tags=list(m.audience_tags or []),
+        generated_rules=rules,
+    )
+
+
+@router.post("/sync-rules", response_model=SyncRulesOut)
+async def sync_rules(
+    session: AsyncSession = Depends(get_session),
+) -> SyncRulesOut:
+    """
+    Rebuild the generated rules file from all enabled manifests' audience_tags
+    and trigger a hot-swap reload in the decision-optimizer.
+
+    This is an explicit operator action — tag changes on enabled manifests do
+    not automatically propagate to the rule engine.  The operator reviews tags
+    (optionally via rule-preview) and calls this endpoint to apply them.
+
+    The rules file is written to DASHBOARD_RULES_OUTPUT_PATH, which must be the
+    same path the decision-optimizer is configured to read (shared volume).
+    """
+    result = await session.execute(
+        select(Manifest)
+        .where(Manifest.status == "enabled")
+        .order_by(Manifest.enabled_at.desc())
+    )
+    enabled = list(result.scalars().all())
+
+    rules_dict = build_rules_file(enabled)
+    generated_count = len(rules_dict["rules"])
+
+    # Check whether a safety fallback was injected (empty-conditions rule)
+    has_fallback = any(
+        len(r.get("conditions", {"x": 1})) == 0
+        for r in rules_dict["rules"]
+    )
+
+    # Write rules file to disk
+    rules_path = Path(settings.rules_output_path)
+    optimizer_reloaded = False
+    optimizer_detail: Optional[str] = None
+    try:
+        rules_path.parent.mkdir(parents=True, exist_ok=True)
+        rules_path.write_text(
+            json.dumps(rules_dict, indent=2),
+            encoding="utf-8",
+        )
+        log.info(
+            "rules file written path=%s rules=%d manifests=%d",
+            rules_path, generated_count, len(enabled),
+        )
+    except OSError as exc:
+        log.error("failed to write rules file: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to write rules file: {exc}",
+        )
+
+    # Trigger hot-swap reload in decision-optimizer
+    reload_url = f"{settings.decision_optimizer_admin_url}/api/v1/rules/reload"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as http:
+            resp = await http.post(reload_url)
+            resp.raise_for_status()
+            optimizer_reloaded = True
+            optimizer_detail = resp.text
+            log.info("decision-optimizer rules reload triggered: %s", resp.status_code)
+    except httpx.HTTPError as exc:
+        optimizer_detail = str(exc)
+        log.warning(
+            "decision-optimizer reload request failed (rules file written): %s", exc
+        )
+
+    await write_event(
+        session,
+        event_type=MANIFEST_RULES_SYNCED,
+        entity_type="manifest",
+        entity_id="*",
+        payload={
+            "enabled_manifest_count": len(enabled),
+            "generated_rule_count": generated_count,
+            "has_fallback": has_fallback,
+            "optimizer_reloaded": optimizer_reloaded,
+        },
+    )
+    await session.commit()
+
+    return SyncRulesOut(
+        status="ok",
+        enabled_manifests=len(enabled),
+        generated_rules=generated_count,
+        has_fallback=has_fallback,
+        optimizer_reloaded=optimizer_reloaded,
+        optimizer_detail=optimizer_detail,
+    )
 
 
 @router.delete("/{manifest_id}", response_model=ManifestOut)
