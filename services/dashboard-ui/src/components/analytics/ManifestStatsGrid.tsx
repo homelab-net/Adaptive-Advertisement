@@ -1,3 +1,4 @@
+import type { ElementType, ReactNode } from 'react'
 import { Users, Eye, TrendingUp, Activity } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { ManifestStats } from '@/types/api'
@@ -8,10 +9,10 @@ interface Props {
 }
 
 interface KpiCardProps {
-  icon: React.ElementType
+  icon: ElementType
   label: string
   value: string
-  sub?: React.ReactNode
+  sub?: ReactNode
 }
 
 function KpiCard({ icon: Icon, label, value, sub }: KpiCardProps) {

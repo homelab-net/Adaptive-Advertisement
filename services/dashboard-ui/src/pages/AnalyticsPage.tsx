@@ -1,464 +1,819 @@
-import { useState } from 'react'
+import { useState, type ElementType } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { BarChart2, RefreshCw, FlaskConical, Lock } from 'lucide-react'
+import {
+  BarChart2,
+  Users,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  RefreshCw,
+  FlaskConical,
+  Star,
+} from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import type {
+  ManifestStats,
+  AudienceComposition,
+} from '@/types/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { ManifestStatsGrid } from '@/components/analytics/ManifestStatsGrid'
 import { DwellTrendChart } from '@/components/analytics/DwellTrendChart'
 import { AudienceSegmentChart } from '@/components/analytics/AudienceSegmentChart'
 import { AdaptiveAdvantageCard } from '@/components/analytics/AdaptiveAdvantageCard'
-import type { ManifestStats } from '@/types/api'
 
-type Tab = 'leaderboard' | 'detail' | 'compare'
-type Window = '1h' | '4h' | '24h' | '7d'
+type WindowOption = '1h' | '4h' | '24h' | '7d'
+type TabId = 'overview' | 'detail' | 'compare'
 
-const WINDOWS: { value: Window; label: string }[] = [
-  { value: '1h',  label: 'Last 1 hour' },
-  { value: '4h',  label: 'Last 4 hours' },
+const WINDOW_OPTIONS: { value: WindowOption; label: string }[] = [
+  { value: '1h', label: 'Last 1 hour' },
+  { value: '4h', label: 'Last 4 hours' },
   { value: '24h', label: 'Last 24 hours' },
-  { value: '7d',  label: 'Last 7 days' },
+  { value: '7d', label: 'Last 7 days' },
 ]
 
-function TrendBadge({ direction }: { direction: string }) {
-  if (direction === 'up')   return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">↑ Up</Badge>
-  if (direction === 'down') return <Badge className="bg-red-100 text-red-700 border-red-200">↓ Down</Badge>
-  if (direction === 'flat') return <Badge className="bg-zinc-100 text-zinc-600 border-zinc-200">→ Flat</Badge>
-  return <Badge variant="secondary" className="text-xs">Insufficient data</Badge>
+const TABS: { id: TabId; label: string; icon: ElementType }[] = [
+  { id: 'overview', label: 'Overview', icon: BarChart2 },
+  { id: 'detail', label: 'Manifest Detail', icon: Activity },
+  { id: 'compare', label: 'Compare A/B', icon: FlaskConical },
+]
+
+// ---------------------------------------------------------------------------
+// Shared sub-components
+// ---------------------------------------------------------------------------
+
+function WindowPicker({
+  value,
+  onChange,
+}: {
+  value: WindowOption
+  onChange: (v: WindowOption) => void
+}) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as WindowOption)}>
+      <SelectTrigger className="w-[160px] h-8 text-sm">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {WINDOW_OPTIONS.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+function TrendIndicator({ direction }: { direction: string }) {
+  if (direction === 'up')
+    return <TrendingUp className="h-4 w-4 text-emerald-500 inline" />
+  if (direction === 'down')
+    return <TrendingDown className="h-4 w-4 text-red-500 inline" />
+  if (direction === 'flat')
+    return <span className="text-zinc-400 text-sm leading-none">→</span>
+  return <span className="text-zinc-300 text-sm leading-none">—</span>
+}
+
+function OutcomeBadge({ dwell }: { dwell: boolean | null }) {
+  if (dwell === true) return <Badge variant="enabled">Dwell</Badge>
+  if (dwell === false) return <Badge variant="paused">No-Dwell</Badge>
+  return <Badge>Interrupted</Badge>
 }
 
 // ---------------------------------------------------------------------------
-// Tab: Leaderboard
+// Tab 1: Overview
 // ---------------------------------------------------------------------------
 
-function LeaderboardTab({ window: win, onWindowChange }: { window: Window; onWindowChange: (w: Window) => void }) {
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['analytics', 'manifests', win],
-    queryFn: () => api.analytics.manifestList({ window: win }),
+function OverviewTab({
+  onSelectManifest,
+}: {
+  onSelectManifest: (id: string) => void
+}) {
+  const [window, setWindow] = useState<WindowOption>('24h')
+
+  const { data, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['analytics-manifests', window],
+    queryFn: () => api.analytics.manifestList({ window }),
     refetchInterval: 60_000,
   })
 
-  const items: ManifestStats[] = data?.items ?? []
+  const noData = !isLoading && !!data && !data.data_available
+
+  // Find highest dwell_completion_rate manifest id for the star
+  let topManifestId: string | null = null
+  if (data?.items && data.items.length > 0) {
+    let bestRate = -Infinity
+    for (const m of data.items) {
+      if (m.dwell_completion_rate !== null && m.dwell_completion_rate > bestRate) {
+        bestRate = m.dwell_completion_rate
+        topManifestId = m.manifest_id
+      }
+    }
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Select value={win} onValueChange={v => onWindowChange(v as Window)}>
-          <SelectTrigger className="w-[160px] h-8 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {WINDOWS.map(w => <SelectItem key={w.value} value={w.value}>{w.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-3.5 w-3.5" />
+      {/* Toolbar */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <WindowPicker value={window} onChange={setWindow} />
+          {data?.items && (
+            <span className="text-xs text-muted-foreground">
+              {data.items.length} manifest{data.items.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => refetch()}
+          disabled={isRefetching}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isRefetching ? 'animate-spin' : ''}`} />
         </Button>
-        {data && !data.data_available && (
-          <span className="text-xs text-amber-600">
-            {/* PLACEHOLDER: data_available=false until MQTT player pipeline is live. */}
-            No impression data yet — awaiting live player events
-          </span>
-        )}
       </div>
 
-      <div className="rounded-lg border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Manifest</TableHead>
-              <TableHead className="text-right">Impressions</TableHead>
-              <TableHead className="text-right">Reach</TableHead>
-              <TableHead className="text-right">Avg Audience</TableHead>
-              <TableHead className="text-right">Dwell Rate</TableHead>
-              <TableHead>Trend</TableHead>
-              <TableHead className="text-right">Last Impression</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-sm">Loading…</TableCell>
-              </TableRow>
-            )}
-            {!isLoading && items.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-sm">
-                  No manifest impression data for this window.
-                </TableCell>
-              </TableRow>
-            )}
-            {items.map(m => (
-              <TableRow key={m.manifest_id}>
-                <TableCell>
-                  <div>
-                    <p className="font-medium text-sm">{m.title ?? m.manifest_id}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{m.manifest_id}</p>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right text-sm">{m.data_available ? m.total_impressions.toLocaleString() : '—'}</TableCell>
-                <TableCell className="text-right text-sm">{m.data_available ? m.total_reach.toLocaleString() : '—'}</TableCell>
-                <TableCell className="text-right text-sm">{m.avg_audience_count !== null ? m.avg_audience_count.toFixed(1) : '—'}</TableCell>
-                <TableCell className="text-right text-sm">
-                  {m.dwell_completion_rate !== null
-                    ? `${(m.dwell_completion_rate * 100).toFixed(1)}%`
-                    : '—'}
-                </TableCell>
-                <TableCell><TrendBadge direction={m.trend_direction} /></TableCell>
-                <TableCell className="text-right text-xs text-muted-foreground">{formatDate(m.last_impression_at)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      {/* Loading */}
+      {isLoading && (
+        <Card>
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+            Loading impression data…
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Empty state — no impression data yet */}
+      {noData && (
+        <Card>
+          <CardContent className="py-16 flex flex-col items-center gap-3">
+            <BarChart2 className="h-8 w-8 text-zinc-300" />
+            <div className="text-center space-y-1 max-w-sm">
+              <p className="text-sm font-medium text-foreground">No impression data yet</p>
+              <p className="text-xs text-muted-foreground">
+                Impressions are recorded automatically once the player is serving approved
+                content and the MQTT pipeline is live.{' '}
+                {/* PLACEHOLDER: requires DASHBOARD_MQTT_ENABLED=true and PLAYER_MQTT_ENABLED=true. */}
+                PLACEHOLDER: requires DASHBOARD_MQTT_ENABLED=true and
+                PLAYER_MQTT_ENABLED=true.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Leaderboard */}
+      {!isLoading && data?.data_available && data.items.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Impression Leaderboard</CardTitle>
+            <CardDescription>Click a row to open Manifest Detail</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                      Manifest
+                    </th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                      Status
+                    </th>
+                    <th className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                      Impressions
+                    </th>
+                    <th className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                      Avg Aud
+                    </th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs w-[180px]">
+                      Dwell%
+                    </th>
+                    <th className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                      Reach
+                    </th>
+                    <th className="text-center px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                      Trend
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.items.map((m) => {
+                    const dwellPct =
+                      m.dwell_completion_rate !== null
+                        ? m.dwell_completion_rate * 100
+                        : null
+                    const isTop = m.manifest_id === topManifestId
+                    return (
+                      <tr
+                        key={m.manifest_id}
+                        className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                        onClick={() => onSelectManifest(m.manifest_id)}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            {isTop && (
+                              <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400 shrink-0" />
+                            )}
+                            <div>
+                              <p className="font-medium truncate max-w-[180px]">
+                                {m.title ?? m.manifest_id}
+                              </p>
+                              <p className="text-xs text-muted-foreground font-mono">
+                                {m.manifest_id}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant={m.status ?? 'draft'}>
+                            {m.status ?? '—'}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {m.total_impressions.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {m.avg_audience_count !== null
+                            ? m.avg_audience_count.toFixed(1)
+                            : '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 rounded-full bg-zinc-100 overflow-hidden min-w-[60px]">
+                              {dwellPct !== null && (
+                                <div
+                                  className="h-full rounded-full bg-emerald-500"
+                                  style={{ width: `${Math.min(dwellPct, 100)}%` }}
+                                />
+                              )}
+                            </div>
+                            <span className="text-xs tabular-nums w-10 text-right">
+                              {dwellPct !== null ? `${dwellPct.toFixed(1)}%` : '—'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {m.total_reach.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <TrendIndicator direction={m.trend_direction} />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Data available but list is empty */}
+      {!isLoading && data?.data_available && data.items.length === 0 && (
+        <Card>
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+            No manifests with impression data in this window.
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Tab: Manifest Detail
+// Tab 2: Manifest Detail
 // ---------------------------------------------------------------------------
 
-function DetailTab({ window: win, onWindowChange }: { window: Window; onWindowChange: (w: Window) => void }) {
-  const [selectedId, setSelectedId] = useState<string>('')
+function DetailTab({
+  manifestList,
+  initialManifestId,
+}: {
+  manifestList: ManifestStats[]
+  initialManifestId: string | null
+}) {
+  const [selectedId, setSelectedId] = useState<string>(initialManifestId ?? '')
+  const [window, setWindow] = useState<WindowOption>('24h')
 
-  // Manifest list for the selector
-  const { data: listData } = useQuery({
-    queryKey: ['analytics', 'manifests', win],
-    queryFn: () => api.analytics.manifestList({ window: win }),
-  })
-
-  const { data: detail, isLoading } = useQuery({
-    queryKey: ['analytics', 'manifest-detail', selectedId, win],
-    queryFn: () => api.analytics.manifestDetail(selectedId, { window: win }),
+  const { data, isLoading } = useQuery({
+    queryKey: ['analytics-detail', selectedId, window],
+    queryFn: () => api.analytics.manifestDetail(selectedId, { window }),
     enabled: !!selectedId,
   })
 
-  const items = listData?.items ?? []
+  const composition: AudienceComposition | null = data?.audience_composition ?? null
 
   return (
     <div className="space-y-4">
+      {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
         <Select value={selectedId} onValueChange={setSelectedId}>
-          <SelectTrigger className="w-[280px] h-8 text-sm">
+          <SelectTrigger className="w-[240px] h-8 text-sm">
             <SelectValue placeholder="Select a manifest…" />
           </SelectTrigger>
           <SelectContent>
-            {items.map(m => (
+            {manifestList.map((m) => (
               <SelectItem key={m.manifest_id} value={m.manifest_id}>
                 {m.title ?? m.manifest_id}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Select value={win} onValueChange={v => onWindowChange(v as Window)}>
-          <SelectTrigger className="w-[160px] h-8 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {WINDOWS.map(w => <SelectItem key={w.value} value={w.value}>{w.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <WindowPicker value={window} onChange={setWindow} />
       </div>
 
+      {/* Prompt when nothing selected */}
       {!selectedId && (
-        <div className="flex h-56 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-          Select a manifest to view detailed impression metrics
-        </div>
+        <Card>
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+            Select a manifest above to view detailed impression metrics.
+          </CardContent>
+        </Card>
       )}
 
       {selectedId && (
-        <div className="space-y-4">
-          {/* KPI row */}
-          <ManifestStatsGrid stats={detail?.stats ?? null} isLoading={isLoading} />
+        <>
+          {/* KPI grid */}
+          <ManifestStatsGrid
+            stats={data?.stats ?? null}
+            isLoading={isLoading}
+          />
 
           {/* Dwell trend chart */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Dwell Completion Trend</CardTitle>
-              <CardDescription className="text-xs">
-                Emerald line = dwell rate (left axis); bars = impression count (right axis)
+              <CardTitle className="text-sm font-medium">Hourly Dwell Trend</CardTitle>
+              <CardDescription>
+                Impression volume (bars, right axis) and dwell completion rate (line, left
+                axis) per hour
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <DwellTrendChart series={detail?.hourly_series ?? []} isLoading={isLoading} />
+              <DwellTrendChart
+                series={data?.hourly_series ?? []}
+                isLoading={isLoading}
+              />
             </CardContent>
           </Card>
 
-          {/* Audience breakdown */}
-          {detail?.audience_composition && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Audience Composition</CardTitle>
-                <CardDescription className="text-xs">
-                  Average age-bin fractions across impressions — probabilistic only, no individual records
-                  {detail.audience_composition.suppressed_pct > 0 && (
-                    <> · {(detail.audience_composition.suppressed_pct * 100).toFixed(0)}% suppressed</>
+          {/* Audience composition */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Audience Composition</CardTitle>
+              <CardDescription>
+                {/* PLACEHOLDER: requires ICD-3 CV age-bin signals from hardware. */}
+                Probabilistic age distribution — no individual records. PLACEHOLDER:
+                requires ICD-3 CV age-bin signals from hardware.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {composition === null ? (
+                <div className="flex h-32 items-center justify-center rounded-md border border-dashed bg-muted/30">
+                  <div className="text-center space-y-1.5">
+                    <Users className="h-7 w-7 text-zinc-300 mx-auto" />
+                    <p className="text-sm text-muted-foreground">
+                      Demographics suppressed or unavailable
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {(
+                    [
+                      { key: 'child' as const, label: 'Child' },
+                      { key: 'young_adult' as const, label: 'Young Adult' },
+                      { key: 'adult' as const, label: 'Adult' },
+                      { key: 'senior' as const, label: 'Senior' },
+                    ]
+                  ).map(({ key, label }) => {
+                    const val = composition[key] as number | null
+                    const pct = val !== null ? val * 100 : null
+                    return (
+                      <div key={key} className="flex items-center gap-3">
+                        <span className="w-24 text-xs text-muted-foreground shrink-0">
+                          {label}
+                        </span>
+                        <div className="flex-1 h-2 rounded-full bg-zinc-100 overflow-hidden">
+                          {pct !== null && (
+                            <div
+                              className="h-full rounded-full bg-emerald-500"
+                              style={{ width: `${Math.min(pct, 100)}%` }}
+                            />
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground w-12 text-right tabular-nums">
+                          {pct !== null ? `${pct.toFixed(1)}%` : '—'}
+                        </span>
+                      </div>
+                    )
+                  })}
+                  {composition.suppressed_pct > 0 && (
+                    <p className="text-xs text-muted-foreground pt-1">
+                      {(composition.suppressed_pct * 100).toFixed(1)}% of impressions:
+                      demographics suppressed
+                    </p>
                   )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {/* Single-manifest view: pass null for compositionB so only A bars render */}
-                <AudienceSegmentChart
-                  compositionA={detail.audience_composition}
-                  compositionB={null}
-                  labelA={detail.title ?? selectedId}
-                  labelB=""
-                />
-              </CardContent>
-            </Card>
-          )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-          {/* Recent impressions log */}
-          {detail?.recent_impressions && detail.recent_impressions.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Recent Impressions</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Started</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead className="text-right">Audience</TableHead>
-                      <TableHead>Dwell Elapsed</TableHead>
-                      <TableHead>Ended Reason</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {detail.recent_impressions.map(imp => (
-                      <TableRow key={imp.id}>
-                        <TableCell className="text-xs text-muted-foreground">{formatDate(imp.started_at)}</TableCell>
-                        <TableCell className="text-xs">{imp.duration_ms !== null ? `${(imp.duration_ms / 1000).toFixed(1)}s` : '—'}</TableCell>
-                        <TableCell className="text-right text-xs">{imp.audience_count ?? '—'}</TableCell>
-                        <TableCell>
-                          {imp.dwell_elapsed === null ? '—' : imp.dwell_elapsed
-                            ? <span className="text-xs text-emerald-600 font-medium">Yes</span>
-                            : <span className="text-xs text-muted-foreground">No</span>}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{imp.ended_reason ?? '—'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* PLACEHOLDER: empty state when no data yet */}
-          {!isLoading && detail && !detail.data_available && (
-            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-              {/* PLACEHOLDER: data_available=false until ICD-9 player events + MQTT are active on hardware. */}
-              No impression data recorded for this manifest yet.
-              Data populates automatically once the player publishes ICD-9 events.
-            </div>
-          )}
-        </div>
+          {/* Recent impressions */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Recent Impressions</CardTitle>
+              <CardDescription>Last 20 recorded impression events</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {isLoading ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  Loading…
+                </div>
+              ) : !data?.recent_impressions ||
+                data.recent_impressions.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  {data && !data.data_available
+                    ? 'No impression records yet — populates once player events are received.'
+                    : 'No impression records in this window.'}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/40">
+                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                          Time
+                        </th>
+                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                          Duration
+                        </th>
+                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                          Audience
+                        </th>
+                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                          Confidence
+                        </th>
+                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                          Outcome
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.recent_impressions.slice(0, 20).map((imp) => (
+                        <tr key={imp.id} className="border-b last:border-0">
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                            {formatDate(imp.started_at)}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-xs">
+                            {imp.duration_ms !== null
+                              ? `${(imp.duration_ms / 1000).toFixed(1)}s`
+                              : '—'}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-xs">
+                            {imp.audience_count ?? '—'}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-xs">
+                            {imp.audience_confidence !== null
+                              ? `${(imp.audience_confidence * 100).toFixed(0)}%`
+                              : '—'}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <OutcomeBadge dwell={imp.dwell_elapsed ?? null} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Tab: Compare A/B
+// Tab 3: Compare A/B
 // ---------------------------------------------------------------------------
 
-function CompareTab({ window: win, onWindowChange }: { window: Window; onWindowChange: (w: Window) => void }) {
-  const [idA, setIdA] = useState<string>('')
-  const [idB, setIdB] = useState<string>('')
+function CompareTab({ manifestList }: { manifestList: ManifestStats[] }) {
+  const [manifestA, setManifestA] = useState<string>('')
+  const [manifestB, setManifestB] = useState<string>('')
+  const [window, setWindow] = useState<WindowOption>('24h')
 
-  const { data: listData } = useQuery({
-    queryKey: ['analytics', 'manifests', win],
-    queryFn: () => api.analytics.manifestList({ window: win }),
+  const bothSelected = !!manifestA && !!manifestB && manifestA !== manifestB
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['analytics-compare', manifestA, manifestB, window],
+    queryFn: () => api.analytics.compare(manifestA, manifestB, { window }),
+    enabled: bothSelected,
   })
 
-  const { data: compareData, isLoading } = useQuery({
-    queryKey: ['analytics', 'compare', idA, idB, win],
-    queryFn: () => api.analytics.compare(idA, idB, { window: win }),
-    enabled: !!idA && !!idB && idA !== idB,
-  })
+  const titleA =
+    data?.manifest_a.title ??
+    manifestList.find((m) => m.manifest_id === manifestA)?.title ??
+    manifestA
+  const titleB =
+    data?.manifest_b.title ??
+    manifestList.find((m) => m.manifest_id === manifestB)?.title ??
+    manifestB
 
-  const items = listData?.items ?? []
+  // Metric values for head-to-head table
+  const aImpressions = data?.manifest_a.total_impressions ?? 0
+  const bImpressions = data?.manifest_b.total_impressions ?? 0
+  const aDwell = data?.manifest_a.dwell_completion_rate ?? null
+  const bDwell = data?.manifest_b.dwell_completion_rate ?? null
+  const aReach = data?.manifest_a.total_reach ?? 0
+  const bReach = data?.manifest_b.total_reach ?? 0
+  const aAvgAud = data?.manifest_a.avg_audience_count ?? null
+  const bAvgAud = data?.manifest_b.avg_audience_count ?? null
+  const aAvgDur = data?.manifest_a.avg_duration_ms ?? null
+  const bAvgDur = data?.manifest_b.avg_duration_ms ?? null
 
-  const ready = !!idA && !!idB && idA !== idB
+  // Returns emerald+bold class for the winning side, empty string otherwise
+  function winClass(
+    aVal: number | null,
+    bVal: number | null,
+    col: 'a' | 'b'
+  ): string {
+    if (aVal === null || bVal === null) return ''
+    if (col === 'a' && aVal > bVal) return 'text-emerald-700 font-bold'
+    if (col === 'b' && bVal > aVal) return 'text-emerald-700 font-bold'
+    return ''
+  }
 
   return (
     <div className="space-y-4">
+      {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground w-5">A</span>
-          <Select value={idA} onValueChange={setIdA}>
-            <SelectTrigger className="w-[240px] h-8 text-sm">
+          <span className="text-xs font-medium text-muted-foreground">A:</span>
+          <Select value={manifestA} onValueChange={setManifestA}>
+            <SelectTrigger className="w-[200px] h-8 text-sm">
               <SelectValue placeholder="Manifest A…" />
             </SelectTrigger>
             <SelectContent>
-              {items.filter(m => m.manifest_id !== idB).map(m => (
-                <SelectItem key={m.manifest_id} value={m.manifest_id}>
-                  {m.title ?? m.manifest_id}
-                </SelectItem>
-              ))}
+              {manifestList
+                .filter((m) => m.manifest_id !== manifestB)
+                .map((m) => (
+                  <SelectItem key={m.manifest_id} value={m.manifest_id}>
+                    {m.title ?? m.manifest_id}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground w-5">B</span>
-          <Select value={idB} onValueChange={setIdB}>
-            <SelectTrigger className="w-[240px] h-8 text-sm">
+          <span className="text-xs font-medium text-muted-foreground">B:</span>
+          <Select value={manifestB} onValueChange={setManifestB}>
+            <SelectTrigger className="w-[200px] h-8 text-sm">
               <SelectValue placeholder="Manifest B…" />
             </SelectTrigger>
             <SelectContent>
-              {items.filter(m => m.manifest_id !== idA).map(m => (
-                <SelectItem key={m.manifest_id} value={m.manifest_id}>
-                  {m.title ?? m.manifest_id}
-                </SelectItem>
-              ))}
+              {manifestList
+                .filter((m) => m.manifest_id !== manifestA)
+                .map((m) => (
+                  <SelectItem key={m.manifest_id} value={m.manifest_id}>
+                    {m.title ?? m.manifest_id}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
-        <Select value={win} onValueChange={v => onWindowChange(v as Window)}>
-          <SelectTrigger className="w-[160px] h-8 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {WINDOWS.map(w => <SelectItem key={w.value} value={w.value}>{w.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <WindowPicker value={window} onChange={setWindow} />
       </div>
 
-      {!ready && (
-        <div className="flex h-56 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-          Select two different manifests to compare their performance
-        </div>
+      {/* Prompt */}
+      {!bothSelected && (
+        <Card>
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+            Select two different manifests above to compare their performance.
+          </CardContent>
+        </Card>
       )}
 
-      {ready && (
-        <div className="space-y-4">
-          {/* Adaptive Advantage callout */}
-          <AdaptiveAdvantageCard
-            comparison={compareData?.comparison ?? null}
-            manifestATitle={compareData?.manifest_a?.title ?? idA}
-            manifestBTitle={compareData?.manifest_b?.title ?? idB}
-            dataAvailable={compareData?.data_available ?? false}
-          />
-
-          {/* Side-by-side KPI summary */}
-          {compareData && (
-            <div className="grid grid-cols-2 gap-4">
-              {([
-                { label: 'A', stats: compareData.manifest_a },
-                { label: 'B', stats: compareData.manifest_b },
-              ] as { label: string; stats: ManifestStats }[]).map(({ label, stats }) => (
-                <Card key={label}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      {label}: {stats.title ?? stats.manifest_id}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <dl className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <dt className="text-muted-foreground">Impressions</dt>
-                        <dd className="font-medium">{stats.data_available ? stats.total_impressions.toLocaleString() : '—'}</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-muted-foreground">Reach</dt>
-                        <dd className="font-medium">{stats.data_available ? stats.total_reach.toLocaleString() : '—'}</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-muted-foreground">Dwell Rate</dt>
-                        <dd className="font-medium">
-                          {stats.dwell_completion_rate !== null ? `${(stats.dwell_completion_rate * 100).toFixed(1)}%` : '—'}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-muted-foreground">Avg Audience</dt>
-                        <dd className="font-medium">{stats.avg_audience_count !== null ? stats.avg_audience_count.toFixed(1) : '—'}</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-muted-foreground">Trend</dt>
-                        <dd><TrendBadge direction={stats.trend_direction} /></dd>
-                      </div>
-                    </dl>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* Audience composition side-by-side */}
-          {compareData && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Audience Composition Comparison</CardTitle>
-                <CardDescription className="text-xs">
-                  Age-bin fractions — probabilistic only, no individual records
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AudienceSegmentChart
-                  compositionA={compareData.manifest_a ? null : null}
-                  compositionB={null}
-                  labelA={compareData?.manifest_a?.title ?? idA}
-                  labelB={compareData?.manifest_b?.title ?? idB}
-                />
-                {/* PLACEHOLDER: audience_composition per-manifest requires dashboard-api
-                    to expose it on the compare endpoint. Currently only available in
-                    the manifest detail endpoint. Wire up once Phase 4 analytics endpoint
-                    is extended to include audience_composition in CompareResponse. */}
-                <p className="text-xs text-muted-foreground mt-2 text-center">
-                  Per-manifest audience composition will populate once ICD-3 signals include age bins.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {isLoading && (
-            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">Loading comparison…</div>
-          )}
-        </div>
+      {bothSelected && isLoading && (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            Loading comparison…
+          </CardContent>
+        </Card>
       )}
-    </div>
-  )
-}
 
-// ---------------------------------------------------------------------------
-// Locked tab: Experiments (Phase 6)
-// ---------------------------------------------------------------------------
+      {bothSelected && !isLoading && data && (
+        <>
+          {/* Head-to-head table */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Head-to-Head Metrics</CardTitle>
+              <CardDescription>
+                Winning column highlighted in emerald
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/40">
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs w-[160px]">
+                        Metric
+                      </th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                        {titleA}
+                      </th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs">
+                        {titleB}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Impressions */}
+                    <tr className="border-b">
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        Impressions
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right tabular-nums text-xs ${winClass(aImpressions, bImpressions, 'a')}`}
+                      >
+                        {aImpressions.toLocaleString()}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right tabular-nums text-xs ${winClass(aImpressions, bImpressions, 'b')}`}
+                      >
+                        {bImpressions.toLocaleString()}
+                      </td>
+                    </tr>
+                    {/* Avg Audience */}
+                    <tr className="border-b">
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        Avg Audience
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right tabular-nums text-xs ${winClass(aAvgAud, bAvgAud, 'a')}`}
+                      >
+                        {aAvgAud !== null ? aAvgAud.toFixed(1) : '—'}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right tabular-nums text-xs ${winClass(aAvgAud, bAvgAud, 'b')}`}
+                      >
+                        {bAvgAud !== null ? bAvgAud.toFixed(1) : '—'}
+                      </td>
+                    </tr>
+                    {/* Dwell Rate */}
+                    <tr className="border-b">
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        Dwell Rate
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right text-xs ${winClass(aDwell, bDwell, 'a')}`}
+                      >
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-14 h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+                            {aDwell !== null && (
+                              <div
+                                className="h-full rounded-full bg-emerald-500"
+                                style={{ width: `${Math.min(aDwell * 100, 100)}%` }}
+                              />
+                            )}
+                          </div>
+                          <span className="tabular-nums">
+                            {aDwell !== null
+                              ? `${(aDwell * 100).toFixed(1)}%`
+                              : '—'}
+                          </span>
+                        </div>
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right text-xs ${winClass(aDwell, bDwell, 'b')}`}
+                      >
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-14 h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+                            {bDwell !== null && (
+                              <div
+                                className="h-full rounded-full bg-emerald-500"
+                                style={{ width: `${Math.min(bDwell * 100, 100)}%` }}
+                              />
+                            )}
+                          </div>
+                          <span className="tabular-nums">
+                            {bDwell !== null
+                              ? `${(bDwell * 100).toFixed(1)}%`
+                              : '—'}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                    {/* Total Reach */}
+                    <tr className="border-b">
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        Total Reach
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right tabular-nums text-xs ${winClass(aReach, bReach, 'a')}`}
+                      >
+                        {aReach.toLocaleString()}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right tabular-nums text-xs ${winClass(aReach, bReach, 'b')}`}
+                      >
+                        {bReach.toLocaleString()}
+                      </td>
+                    </tr>
+                    {/* Avg Duration */}
+                    <tr>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        Avg Duration
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right tabular-nums text-xs ${winClass(aAvgDur, bAvgDur, 'a')}`}
+                      >
+                        {aAvgDur !== null
+                          ? `${(aAvgDur / 1000).toFixed(1)}s`
+                          : '—'}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right tabular-nums text-xs ${winClass(aAvgDur, bAvgDur, 'b')}`}
+                      >
+                        {bAvgDur !== null
+                          ? `${(bAvgDur / 1000).toFixed(1)}s`
+                          : '—'}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
 
-function ExperimentsLockedTab() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center gap-3">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Lock className="h-5 w-5 text-muted-foreground" />
-      </div>
-      <div className="space-y-1">
-        <p className="font-medium text-sm">Experiments — Phase 6</p>
-        <p className="text-xs text-muted-foreground max-w-sm">
-          {/* PLACEHOLDER: Bounded Optimizer Assistance (Phase 6) unlocks automated A/B variant
-              generation within operator-approved asset bounds. Requires:
-              1. Phase 5 Structured Creative Assembly infrastructure
-              2. Operator-configured mutation limits in campaign settings
-              3. Sufficient dwell-rate baseline from Phase 4 impression data
-              4. Client approval to delegate bounded creative freedom */}
-          Automated A/B variant generation within approved creative bounds.
-          Unlocks in Phase 6 after establishing dwell-rate baselines.
-        </p>
-        <Badge variant="secondary" className="text-xs mt-2">Coming in Phase 6</Badge>
-      </div>
-      <div className="mt-2 rounded-md bg-muted/60 px-4 py-3 text-left max-w-sm">
-        <p className="text-xs font-medium mb-1">Maturity path</p>
-        <ol className="text-xs text-muted-foreground space-y-0.5 list-decimal list-inside">
-          <li className="text-emerald-600 font-medium">Rules-first delivery ✓</li>
-          <li className="text-emerald-600 font-medium">Controlled pilot experimentation ✓</li>
-          <li>Bounded optimizer assistance ← Phase 6</li>
-          <li>Continuous bounded improvement</li>
-        </ol>
-      </div>
+          {/* Adaptive Advantage */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Adaptive Advantage</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AdaptiveAdvantageCard
+                comparison={data.comparison}
+                manifestATitle={titleA}
+                manifestBTitle={titleB}
+                dataAvailable={data.data_available}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Audience segment comparison */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">
+                Audience Demographics
+              </CardTitle>
+              <CardDescription>
+                {/* PLACEHOLDER: audience_composition per-manifest in CompareResponse
+                    requires dashboard-api Phase 4 compare endpoint extension.
+                    Until then compositionA/B are null and the empty state renders. */}
+                Grouped by age segment — PLACEHOLDER: requires ICD-3 age-bin signals
+                from CV pipeline on hardware.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AudienceSegmentChart
+                compositionA={
+                  (
+                    data.manifest_a as unknown as {
+                      audience_composition?: AudienceComposition
+                    }
+                  ).audience_composition ?? null
+                }
+                compositionB={
+                  (
+                    data.manifest_b as unknown as {
+                      audience_composition?: AudienceComposition
+                    }
+                  ).audience_composition ?? null
+                }
+                labelA={titleA}
+                labelB={titleB}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Privacy notice */}
+          <p className="text-xs text-zinc-400 text-center pb-2">
+            🔒 All metrics are aggregate only. No individual tracking. Audience counts
+            are window averages, not per-person records.
+          </p>
+        </>
+      )}
     </div>
   )
 }
@@ -467,54 +822,70 @@ function ExperimentsLockedTab() {
 // Page root
 // ---------------------------------------------------------------------------
 
-const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: 'leaderboard', label: 'Leaderboard', icon: BarChart2 },
-  { id: 'detail',      label: 'Manifest Detail', icon: BarChart2 },
-  { id: 'compare',     label: 'Compare A/B', icon: BarChart2 },
-  { id: 'experiments' as Tab, label: 'Experiments', icon: FlaskConical },
-]
-
 export function AnalyticsPage() {
-  const [tab, setTab] = useState<Tab>('leaderboard')
-  const [win, setWin] = useState<Window>('24h')
+  const [activeTab, setActiveTab] = useState<TabId>('overview')
+  const [selectedManifestId, setSelectedManifestId] = useState<string | null>(null)
+
+  // Shared manifest list used by Detail and Compare pickers
+  const { data: listData } = useQuery({
+    queryKey: ['analytics-manifests-shared'],
+    queryFn: () => api.analytics.manifestList({}),
+    refetchInterval: 60_000,
+  })
+
+  const manifestList: ManifestStats[] = listData?.items ?? []
+
+  function handleSelectManifest(id: string) {
+    setSelectedManifestId(id)
+    setActiveTab('detail')
+  }
 
   return (
     <div className="p-6">
+      {/* Page header */}
       <div className="mb-6">
         <h1 className="text-xl font-semibold">Analytics</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Per-manifest impression metrics, dwell trends, and audience-aware A/B analysis —
-          privacy-safe aggregated data only
+          Privacy-safe aggregated impression metrics — no individual tracking
         </p>
       </div>
 
-      {/* Tab strip */}
-      <div className="flex border-b mb-5 gap-0">
-        {TABS.map(t => {
-          const locked = (t.id as string) === 'experiments'
+      {/* Tab bar */}
+      <div className="flex items-center gap-0 border-b mb-6">
+        {TABS.map((tab) => {
+          const Icon = tab.icon
+          const isActive = activeTab === tab.id
           return (
             <button
-              key={t.id}
-              onClick={() => !locked && setTab(t.id)}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
               className={[
-                'flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors',
-                tab === t.id && !locked
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground',
-                locked ? 'cursor-default opacity-60' : 'cursor-pointer',
+                'flex items-center gap-1.5 px-4 py-2.5 text-sm transition-colors -mb-px',
+                isActive
+                  ? 'border-b-2 border-primary text-foreground font-medium'
+                  : 'text-muted-foreground hover:text-foreground',
               ].join(' ')}
             >
-              {locked && <Lock className="h-3 w-3" />}
-              {t.label}
+              <Icon className="h-3.5 w-3.5" />
+              {tab.label}
             </button>
           )
         })}
       </div>
 
-      {tab === 'leaderboard' && <LeaderboardTab window={win} onWindowChange={setWin} />}
-      {tab === 'detail'      && <DetailTab      window={win} onWindowChange={setWin} />}
-      {tab === 'compare'     && <CompareTab     window={win} onWindowChange={setWin} />}
-      {(tab as string) === 'experiments' && <ExperimentsLockedTab />}
+      {/* Tab content */}
+      {activeTab === 'overview' && (
+        <OverviewTab onSelectManifest={handleSelectManifest} />
+      )}
+      {activeTab === 'detail' && (
+        <DetailTab
+          manifestList={manifestList}
+          initialManifestId={selectedManifestId}
+        />
+      )}
+      {activeTab === 'compare' && (
+        <CompareTab manifestList={manifestList} />
+      )}
     </div>
   )
 }
