@@ -166,10 +166,11 @@ jobs:
       - name: Install integration test deps
         run: |
           pip install \
-            pytest>=8.0 \
-            pytest-asyncio>=0.23 \
-            aiohttp>=3.9 \
-            jsonschema>=4.21
+            "pytest>=8.0" \
+            "pytest-asyncio>=0.23" \
+            "pytest-aiohttp>=1.0" \
+            "aiohttp>=3.9" \
+            "jsonschema>=4.21"
 
       - name: Run integration tests
         env:
@@ -210,6 +211,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
 
       - name: Build service images (excluding input-cv)
         env:
@@ -304,6 +307,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
 
       # Build all service images in parallel using compose.
       # Uses RENDERER_BACKEND=stub so no GPU or display is required.
