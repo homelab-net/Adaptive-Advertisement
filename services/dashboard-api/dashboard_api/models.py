@@ -9,15 +9,20 @@ campaigns           — operator-defined groupings of approved manifests
 campaign_manifests  — M2M join: campaigns ↔ manifests with ordering
 safe_mode_state     — singleton row tracking appliance safe-mode intent
 audit_events        — append-only log of all operator actions (PRIV-006)
+audience_snapshots  — aggregated audience-state signals (analytics, PRIV-safe)
+play_events         — manifest activation log from player (impressions)
+uptime_events       — health-probe ticks for player SLO tracking
 
 Design rules enforced here
 --------------------------
 - All PKs are UUID v4 (str on SQLite, native UUID on PostgreSQL).
-- `audit_events` has no update columns — the table is append-only.
+- `audit_events` and `play_events` have no update columns — append-only.
 - No raw image data, frame data, or biometric templates anywhere.
 - `manifest_json` (JSONB on PostgreSQL) stores the ICD-5 creative manifest
   payload as supplied by the operator; business-logic validation is in the
   router layer.
+- `audience_snapshots` stores only aggregate counts and coarse bins — no
+  individual tracking IDs, no session identifiers (PRIV-001..PRIV-005).
 """
 import uuid
 from datetime import datetime, timezone
@@ -118,7 +123,6 @@ class Asset(Base):
     size_bytes: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     sha256: Mapped[str] = mapped_column(sa.String(64), nullable=False)
 
-    # Nullable FK — asset may exist before being assigned to a manifest
     manifest_id: Mapped[str | None] = mapped_column(
         sa.String(128), nullable=True, index=True
     )
@@ -246,80 +250,86 @@ class AuditEvent(Base):
 
 
 # ---------------------------------------------------------------------------
-# impression_events  (append-only analytics record — driven by ICD-9 player events)
-#
-# DESIGN RATIONALE
-# ----------------
-# Each row represents one manifest impression: the window from when the player
-# activated a manifest (ICD-9 manifest_activated event) to when it deactivated it.
-#
-# Audience fields are snapshotted from the most recent ICD-3 audience-state
-# signal at impression start time (signal_age_ms < 5000 ms guard applied in
-# ImpressionRecorder). NULL audience fields = signal was stale or unavailable.
-#
-# Privacy: all audience fields are aggregate metadata only — no individual
-# identifiers, no raw images, no biometric data. Consistent with locked
-# privacy invariants (PRIV-004, PRIV-005, PRIV-006).
-#
-# Append-only: ended_at + dwell_elapsed are set once when impression closes.
-# No further updates occur after that.
-#
-# PLACEHOLDER: rows are populated by ImpressionRecorder (impression_recorder.py)
-# which subscribes to MQTT topics:
-#   - adaptive-ad/audience/state  (ICD-3) — for audience snapshot
-#   - adaptive-ad/player/events   (ICD-9) — for manifest_activated / deactivated
-# These topics will be live once input-cv + audience-state + player are running
-# on Jetson hardware. Until then all analytics endpoints return data_available=false.
+# audience_snapshots  (analytics sink — privacy-safe aggregates only)
 # ---------------------------------------------------------------------------
 
-class ImpressionEvent(Base):
-    __tablename__ = "impression_events"
+class AudienceSnapshot(Base):
+    """
+    Aggregated audience-state signal row written by the audience_sink.
+
+    Privacy rules (PRIV-001..PRIV-005):
+    - No individual-level data: only aggregate counts and coarse bin averages.
+    - No message IDs, no tracking IDs, no session identifiers.
+    - demographics_suppressed=True means age bin columns are NULL.
+    """
+    __tablename__ = "audience_snapshots"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=_uuid)
-
-    # Which manifest was shown
-    manifest_id: Mapped[str] = mapped_column(
-        sa.String(128), nullable=False, index=True
+    sampled_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, index=True
     )
-    # Forwarded from ICD-4 activate_creative.rationale (decision rule that
-    # triggered this impression). NULL until player publishes ICD-9 events.
-    rule_rationale: Mapped[str | None] = mapped_column(sa.String(128), nullable=True)
-
-    # Timing
-    started_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False, default=_now,
-        server_default=func.now(), index=True,
-    )
-    ended_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True, index=True
-    )
-    duration_ms: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
-
-    # ICD-3 audience snapshot at impression start
-    # NULL when ICD-3 signal was stale (age > 5 s) or pipeline offline
-    audience_count: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
-    audience_confidence: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
-
-    # Coarse age-bin probabilities from ICD-3 demographics (0.0–1.0 each)
-    age_child: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
-    age_young_adult: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
-    age_adult: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
-    age_senior: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
-    # True when ICD-3 demographics.suppressed was true for this impression
-    demographics_suppressed: Mapped[bool | None] = mapped_column(
-        sa.Boolean, nullable=True
-    )
-
-    # Outcome
-    # NULL  = impression ended by disconnect/safe-mode (not a clean switch)
-    # True  = player reported dwell_elapsed=true before deactivation
-    # False = switched away before dwell completed
-    dwell_elapsed: Mapped[bool | None] = mapped_column(sa.Boolean, nullable=True)
-    # "switch" | "disconnect" | "safe_mode" | "freeze" | "unknown"
-    ended_reason: Mapped[str | None] = mapped_column(sa.String(32), nullable=True)
+    presence_count: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    presence_confidence: Mapped[float] = mapped_column(sa.Float, nullable=False)
+    state_stable: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+    pipeline_degraded: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+    demographics_suppressed: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+    # Coarse age bins — NULL when demographics_suppressed=True
+    age_group_child: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    age_group_young_adult: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    age_group_adult: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    age_group_senior: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
 
     def __repr__(self) -> str:
-        return (
-            f"<ImpressionEvent {self.manifest_id} "
-            f"started={self.started_at.isoformat()} dwell={self.dwell_elapsed}>"
-        )
+        return f"<AudienceSnapshot count={self.presence_count} @ {self.sampled_at}>"
+
+
+# ---------------------------------------------------------------------------
+# play_events  (impression / activation log from player — append-only)
+# ---------------------------------------------------------------------------
+
+class PlayEvent(Base):
+    """
+    Each row is one manifest activation event published by the player via MQTT.
+    Provides impression data for analytics and campaign tracking.
+    Append-only — no update columns.
+    """
+    __tablename__ = "play_events"
+
+    id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=_uuid)
+    manifest_id: Mapped[str] = mapped_column(sa.String(128), nullable=False, index=True)
+    activated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, index=True
+    )
+    reason: Mapped[str | None] = mapped_column(sa.String(256), nullable=True)
+    prev_manifest_id: Mapped[str | None] = mapped_column(sa.String(128), nullable=True)
+    received_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, default=_now,
+        server_default=func.now(),
+    )
+
+    def __repr__(self) -> str:
+        return f"<PlayEvent manifest={self.manifest_id} @ {self.activated_at}>"
+
+
+# ---------------------------------------------------------------------------
+# uptime_events  (health-probe tick sink for SLO tracking)
+# ---------------------------------------------------------------------------
+
+class UptimeEvent(Base):
+    """
+    One row per uptime-sink probe cycle.
+    Used to compute player availability % against the 99.5% monthly SLO.
+    """
+    __tablename__ = "uptime_events"
+
+    id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=_uuid)
+    sampled_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, index=True
+    )
+    player_status: Mapped[str] = mapped_column(
+        sa.String(32), nullable=False
+    )  # "healthy" | "unhealthy" | "unreachable"
+    overall_status: Mapped[str] = mapped_column(sa.String(32), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<UptimeEvent player={self.player_status} @ {self.sampled_at}>"

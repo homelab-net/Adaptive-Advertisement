@@ -19,6 +19,8 @@ dependencies = [
     "pydantic-settings>=2.2,<3.0",
     # HTTP client for health aggregation
     "aiohttp>=3.9,<4.0",
+    # MQTT client for analytics sinks
+    "aiomqtt>=2.0,<3.0",
     # File upload support (FastAPI UploadFile requires this)
     "python-multipart>=0.0.9,<1.0",
 ]

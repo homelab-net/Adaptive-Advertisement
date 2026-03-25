@@ -42,6 +42,12 @@ FALLBACK_REFRESH_INTERVAL_S: float = float(
     os.environ.get("FALLBACK_REFRESH_INTERVAL_S", "60")
 )
 
+# How often (seconds) the player rescans the manifest store directory.
+# Full-replace semantics: manifests removed from disk are evicted from memory.
+MANIFEST_RELOAD_INTERVAL_S: float = float(
+    os.environ.get("MANIFEST_RELOAD_INTERVAL_S", "60")
+)
+
 # Health server port (OBS-002)
 HEALTH_PORT: int = int(os.environ.get("HEALTH_PORT", "8080"))
 
@@ -64,6 +70,13 @@ WS_RECONNECT_MAX_BACKOFF_S: float = float(
 PLAYER_CONTRACT_DIR: str = os.environ.get(
     "PLAYER_CONTRACT_DIR",
     str(Path(__file__).parent.parent.parent.parent / "contracts"),
+)
+
+# --- MQTT (play-event publisher) -----------------------------------------
+MQTT_BROKER_HOST: str = os.environ.get("MQTT_BROKER_HOST", "localhost")
+MQTT_BROKER_PORT: int = int(os.environ.get("MQTT_BROKER_PORT", "1883"))
+MQTT_PLAY_EVENTS_TOPIC: str = os.environ.get(
+    "MQTT_PLAY_EVENTS_TOPIC", "adaptive/play-events/v1"
 )
 
 # Log level (OBS-001)

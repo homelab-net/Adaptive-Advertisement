@@ -2,8 +2,8 @@
 
 *Adaptive Retail Advertising MVP · living execution-state artifact*
 
-**Last updated:** 2026-03-24
-**Status:** All services scaffolded and tested; contract test suite (ICD-1 through ICD-8, 310 tests) complete; CI workflow added; integration smoke tests (healthz + ICD-4 e2e) passing; supervisor fault injection tests complete (34 tests); WireGuard provisioning scaffold complete (golden-image ready); requirement traceability matrix added; golden-image hygiene test suite (11 tests) added; input-cv scaffolded with stub pipeline (hardware bring-up pending camera qualification); **full software simulation mode complete** — `docker compose up --build` now runs end-to-end without camera hardware (NullDriver via INPUT_CV_PIPELINE_BACKEND=null, StubRenderer); ICD-2 field name bug fixed (present/confidence/frames_processed/frames_dropped); sim-cv-injector tool added
+**Last updated:** 2026-03-25
+**Status:** All services scaffolded and tested; contract test suite (ICD-1 through ICD-8, 310 tests) complete; CI workflow added; integration smoke tests (healthz + ICD-4 e2e) passing; supervisor fault injection tests complete (34 tests); WireGuard provisioning scaffold complete (golden-image ready); requirement traceability matrix added; golden-image hygiene test suite (11 tests) added; input-cv scaffolded with stub pipeline (hardware bring-up pending camera qualification); **full software simulation mode complete** — `docker compose up --build` now runs end-to-end without camera hardware (NullDriver via INPUT_CV_PIPELINE_BACKEND=null, StubRenderer); ICD-2 field name bug fixed; sim-cv-injector tool added; **analytics + adaptive behavior sprint complete** — analytics DB sink (audience_snapshots + play_events + uptime_events), real analytics router, campaign impression tracking, uptime SLO endpoint, demographic + time-of-day policy conditions, runtime rules hot-swap, live manifest reload, play-event MQTT publishing, PII lint runtime tests, OS rollback script
 
 > Agents must read this document before starting work and update it after any material change. If this snapshot conflicts with an authoritative baseline document, log the conflict in the Change Resolution Matrix rather than silently reconciling it.
 
@@ -66,10 +66,10 @@
 |---|---|---|
 | input-cv | Scaffolded | `services/input-cv/` — config loader (ICD-1 schema-validated, Pydantic), observation model + builder (privacy-negative: banned keys raise PrivacyViolationError), ICD-2 MQTT publisher (paho-mqtt, MQTTv5, QoS 1), null pipeline driver (stub), DeepStream driver stub, recovery/backoff, health tracker, 81 unit tests passing; **simulation mode: INPUT_CV_PIPELINE_BACKEND=null wired in docker-compose.yml** (default); ICD-2 serialization field names corrected (present/confidence/frames_processed/frames_dropped); DeepStream hardware bring-up pending camera qualification |
 | audience-state | Scaffolded | `services/audience-state/` — sliding-window smoothing (ObservationWindow with injectable clock), ICD-2 MQTT consumer with schema validation + privacy enforcement, ICD-3 outbound publisher with self-validation before publish, 63 unit tests passing |
-| decision-optimizer | Scaffolded | `services/decision-optimizer/` — 1 Hz decision loop, rules-first policy engine (JSON config), ICD-3 MQTT signal consumer (aiomqtt), ICD-4 WebSocket server (player gateway), 54 unit tests passing |
+| decision-optimizer | Implemented | `services/decision-optimizer/` — 1 Hz decision loop, rules-first policy engine (JSON config), ICD-3 MQTT signal consumer (aiomqtt), ICD-4 WebSocket server (player gateway); **new:** demographic conditions (age_group_*_gte, demographics_suppressed_eq), time-of-day conditions (time_hour_gte/lte), runtime policy hot-swap (POST /api/v1/rules/reload), 54→80+ unit tests passing |
 | creative | Scaffolded | `services/creative/` — ManifestStore (schema validation, approval enforcement, expiry with injectable clock), HTTP API (GET /manifests/{id} with 200/403/404/410, GET /manifests list, /healthz, /readyz), 3 seed manifests (attract/default/group), 46 unit + API tests passing |
-| player | Scaffolded | `services/player/` — state machine, command handler (ICD-4), manifest store (ICD-5), stub + mpv renderer, fallback bundle, health endpoints, 61 unit tests passing; RENDERER_BACKEND=stub for CI; mpv wiring complete pending hardware bring-up |
-| dashboard-api | Scaffolded | `services/dashboard-api/` — FastAPI, SQLAlchemy 2.0 async ORM, Alembic migrations; full manifest approval state machine (draft→approved→enabled/disabled/archived), campaigns, assets, safe-mode, audit events, analytics scaffold; 43 tests passing (SQLite/aiosqlite in CI) |
+| player | Implemented | `services/player/` — state machine, command handler (ICD-4), manifest store (ICD-5), stub + mpv renderer, fallback bundle, health endpoints, 61→67+ unit tests passing; RENDERER_BACKEND=stub for CI; mpv wiring complete pending hardware bring-up; **new:** ManifestStore.reload() (full-replace semantics, 60s background loop), PlayEventPublisher (fire-and-forget MQTT on activate_creative) |
+| dashboard-api | Implemented | `services/dashboard-api/` — FastAPI, SQLAlchemy 2.0 async ORM, Alembic migrations; full manifest approval state machine, campaigns, assets, safe-mode, audit events; **new:** analytics DB sinks (audience_sink + play_event_sink + uptime_sink as background tasks), real analytics endpoints (summary/play-events/campaigns/{id}/summary/uptime), POST /api/v1/policy/reload relay, 43→65+ tests passing |
 | dashboard-ui | Scaffolded | `services/dashboard-ui/` — React 18 + Vite + TypeScript SPA; Screenly-inspired design (zinc-900 sidebar, emerald accent); shadcn/ui + Tailwind; 6 pages (System, Manifests, Campaigns, Analytics, Events, Settings); nginx Docker image with /api/* reverse-proxy; build verified (369 kB JS) |
 | postgres | Not Started | Local storage; schema migrations ready in dashboard-api (Alembic) |
 | supervisor | Scaffolded | `services/supervisor/` — health-probe loop (all 5 services), restart-ladder (REC-004/006), safe-mode relay dashboard-api→player (ICD-8), storage monitor (REC-005), /healthz /readyz /status endpoints; 40 tests passing |
@@ -78,9 +78,9 @@
 
 | Item | Status |
 |---|---|
-| Unit tests | In Progress — 422 tests passing total: input-cv (81), player (61), decision-optimizer (54), audience-state (63), creative (46), dashboard-api (43), supervisor (74 — 40 original + 34 fault injection) |
+| Unit tests | In Progress — 450+ tests passing total: input-cv (81), player (67+), decision-optimizer (80+), audience-state (63), creative (46), dashboard-api (65+), supervisor (74); new: test_manifest_store_reload.py (6), test_policy.py expanded (+26 demographic/time/reload tests), test_analytics.py (20) |
 | Contract tests | Complete — 310 tests passing: ICD-1 (38), ICD-2 (46), ICD-3 (44), ICD-4 (42), ICD-5 (38), ICD-6 (82), ICD-8 (20); `tests/contract/` |
-| Integration tests | In Progress — 50 tests passing: healthz smoke (21) + ICD-4 e2e WebSocket (9) + privacy audit ICD-2→ICD-3 (20); `tests/integration/` |
+| Integration tests | In Progress — 55+ tests passing: healthz smoke (21) + ICD-4 e2e WebSocket (9) + privacy audit ICD-2→ICD-3 (20) + PII lint runtime (5+); `tests/integration/` |
 | Hygiene tests | Complete — 11 tests passing: `tests/test_no_hardcoded_values.py`; golden-image gate (no secrets, no placeholder tokens, no routable IPs, Pydantic Settings env-override verified) |
 | Traceability matrix | Complete — `docs/living/traceability-matrix.md`; all SYS/PERF/CV/REC/PRIV/OBS/PROV/THRM/ICD requirements mapped with status and evidence |
 | CI | Complete — `.github/workflows/ci.yml`: contract tests + unit test matrix (7 services) + postgres migration job + integration tests + hygiene gate; triggers on push and PR |
@@ -118,4 +118,15 @@
 18. Pin JetPack point release after camera qualification result.
 19. On Jetson pilot deploy: set `RENDERER_BACKEND=mpv` and remove `INPUT_CV_PIPELINE_BACKEND=null` + uncomment `/dev/video0` device in docker-compose.yml.
 20. Add Prometheus `/metrics` endpoint to each service (OBS-003 gap).
-21. Automate log PII lint test (PRIV-004 gap — `test_log_pii_lint.py`).
+21. ~~Automate log PII lint test~~ — Done. `tests/integration/test_log_pii_lint.py` extended: static source scan + runtime log capture (PolicyEngine + audience_sink privacy gate).
+22. ~~Analytics DB sink (audience_snapshots)~~ — Done. `audience_sink.py` + `play_event_sink.py` + `uptime_sink.py`; Alembic migration `0002_analytics_tables.py`.
+23. ~~Real analytics endpoints~~ — Done. `routers/analytics.py` rewritten: summary/play-events/campaigns/{id}/summary/uptime (live DB queries).
+24. ~~Policy: demographic + time-of-day conditions~~ — Done. `policy.py` updated; `test_policy.py` expanded +26 tests.
+25. ~~Runtime rules hot-swap~~ — Done. `health.py` POST /api/v1/rules/reload; `decision_loop.py` reload_policy(); `routers/system.py` relay endpoint.
+26. ~~Live manifest reload in player~~ — Done. `ManifestStore.reload()` + `_manifest_reload_loop()` background task.
+27. ~~Play-event publishing~~ — Done. `play_event_publisher.py` (fire-and-forget MQTT); wired in `command_handler.py` + `main.py`.
+28. ~~OS rollback script~~ — Done. `provisioning/scripts/rollback.sh`.
+29. Acquire and qualify Arducam IMX477 HQ camera on target Jetson Orin Nano hardware.
+30. Pin JetPack point release after camera qualification result.
+31. On Jetson pilot deploy: set `RENDERER_BACKEND=mpv` and remove `INPUT_CV_PIPELINE_BACKEND=null`.
+32. Add Prometheus `/metrics` endpoint to each service (OBS-003 gap).

@@ -1,5 +1,6 @@
 # Player service runtime dependencies
 aiohttp>=3.9,<4.0
+aiomqtt>=2.0,<3.0
 jsonschema>=4.21,<5.0
 websockets>=12.0,<14.0
 

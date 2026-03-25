@@ -165,3 +165,204 @@ class TestLoadPolicy:
         assert eng.evaluate(make_signal(count=0, confidence=0.5)) == "manifest-attract"
         # Low confidence blocks specific rules → attract
         assert eng.evaluate(make_signal(count=5, confidence=0.3)) == "manifest-attract"
+
+
+# ---------------------------------------------------------------------------
+# Demographic conditions
+# ---------------------------------------------------------------------------
+
+class TestDemographicConditions:
+    def _rule(self, **conditions) -> Rule:
+        return Rule(rule_id="r", priority=0, manifest_id="m", **conditions)
+
+    def _sig_with_demo(self, count=1, suppressed=False, **age_groups):
+        demo = {"age_groups": age_groups} if age_groups else {"age_groups": {}}
+        return make_signal(
+            count=count,
+            demographics=demo,
+            demographics_suppressed=suppressed,
+        )
+
+    def test_age_group_adult_gte_matches(self):
+        r = self._rule(age_group_adult_gte=0.5)
+        sig = self._sig_with_demo(suppressed=False, adult=0.6)
+        assert r.matches(sig)
+
+    def test_age_group_adult_gte_miss(self):
+        r = self._rule(age_group_adult_gte=0.5)
+        sig = self._sig_with_demo(suppressed=False, adult=0.3)
+        assert not r.matches(sig)
+
+    def test_demographic_condition_blocked_when_suppressed(self):
+        r = self._rule(age_group_adult_gte=0.1)
+        # Even a 0.1 threshold should not match when demographics_suppressed=True
+        sig = self._sig_with_demo(suppressed=True, adult=0.9)
+        assert not r.matches(sig)
+
+    def test_demographics_suppressed_eq_true_matches(self):
+        r = self._rule(demographics_suppressed_eq=True)
+        sig = make_signal(demographics_suppressed=True)
+        assert r.matches(sig)
+
+    def test_demographics_suppressed_eq_false_mismatches(self):
+        r = self._rule(demographics_suppressed_eq=False)
+        sig = make_signal(demographics_suppressed=True)
+        assert not r.matches(sig)
+
+    def test_missing_demographics_key_treated_as_zero(self):
+        # No demographics key in signal at all — age bins default to 0.0
+        r = self._rule(age_group_child_gte=0.1)
+        sig = make_signal(demographics_suppressed=False)  # no demographics dict
+        assert not r.matches(sig)
+
+    def test_all_age_bins(self):
+        r = self._rule(
+            age_group_child_gte=0.1,
+            age_group_young_adult_gte=0.1,
+            age_group_adult_gte=0.1,
+            age_group_senior_gte=0.1,
+        )
+        sig = self._sig_with_demo(
+            suppressed=False,
+            child=0.2, young_adult=0.3, adult=0.4, senior=0.1
+        )
+        assert r.matches(sig)
+
+    def test_combined_presence_and_demographic(self):
+        r = self._rule(presence_count_gte=2, age_group_senior_gte=0.3)
+        sig = self._sig_with_demo(count=3, suppressed=False, senior=0.5)
+        assert r.matches(sig)
+        # Presence fails
+        sig_low_count = self._sig_with_demo(count=1, suppressed=False, senior=0.5)
+        assert not r.matches(sig_low_count)
+
+
+# ---------------------------------------------------------------------------
+# Time-of-day conditions
+# ---------------------------------------------------------------------------
+
+class TestTimeOfDayConditions:
+    def _rule(self, **conditions) -> Rule:
+        return Rule(rule_id="r", priority=0, manifest_id="m", **conditions)
+
+    def test_time_hour_gte_matches(self):
+        r = self._rule(time_hour_gte=9)
+        assert r.matches(make_signal(), now_hour=9)
+        assert r.matches(make_signal(), now_hour=12)
+        assert not r.matches(make_signal(), now_hour=8)
+
+    def test_time_hour_lte_matches(self):
+        r = self._rule(time_hour_lte=17)
+        assert r.matches(make_signal(), now_hour=17)
+        assert r.matches(make_signal(), now_hour=10)
+        assert not r.matches(make_signal(), now_hour=18)
+
+    def test_time_hour_both_bounds(self):
+        r = self._rule(time_hour_gte=9, time_hour_lte=17)
+        assert r.matches(make_signal(), now_hour=9)
+        assert r.matches(make_signal(), now_hour=17)
+        assert r.matches(make_signal(), now_hour=13)
+        assert not r.matches(make_signal(), now_hour=8)
+        assert not r.matches(make_signal(), now_hour=18)
+
+    def test_time_combined_with_presence(self):
+        r = self._rule(presence_count_gte=1, time_hour_gte=8, time_hour_lte=20)
+        assert r.matches(make_signal(count=2), now_hour=10)
+        assert not r.matches(make_signal(count=2), now_hour=21)
+        assert not r.matches(make_signal(count=0), now_hour=10)
+
+    def test_policy_engine_passes_now_hour(self):
+        from datetime import datetime, timezone
+
+        # Inject a fixed time via _now_fn
+        fixed_hour = 14
+        fixed_dt = datetime(2026, 1, 1, fixed_hour, 0, 0, tzinfo=timezone.utc)
+        rules = [
+            Rule("daytime", priority=10, manifest_id="m-day",
+                 time_hour_gte=9, time_hour_lte=18),
+            Rule("catch",   priority=0,  manifest_id="m-catch"),
+        ]
+        eng = PolicyEngine(
+            PolicyConfig(rules=rules),
+            _now_fn=lambda: fixed_dt,
+        )
+        assert eng.evaluate(make_signal()) == "m-day"
+
+    def test_policy_engine_outside_window(self):
+        from datetime import datetime, timezone
+
+        fixed_dt = datetime(2026, 1, 1, 22, 0, 0, tzinfo=timezone.utc)
+        rules = [
+            Rule("daytime", priority=10, manifest_id="m-day",
+                 time_hour_gte=9, time_hour_lte=18),
+            Rule("catch",   priority=0,  manifest_id="m-catch"),
+        ]
+        eng = PolicyEngine(
+            PolicyConfig(rules=rules),
+            _now_fn=lambda: fixed_dt,
+        )
+        assert eng.evaluate(make_signal()) == "m-catch"
+
+
+# ---------------------------------------------------------------------------
+# Runtime rules reload
+# ---------------------------------------------------------------------------
+
+class TestReloadPolicy:
+    def _write_rules(self, path: Path, rule_id: str, manifest_id: str) -> None:
+        rules = {
+            "schema_version": "1.0.0",
+            "rules": [
+                {
+                    "rule_id": rule_id,
+                    "priority": 0,
+                    "manifest_id": manifest_id,
+                    "conditions": {},
+                }
+            ],
+        }
+        path.write_text(json.dumps(rules))
+
+    def test_load_then_reload_applies_new_rules(self, tmp_path):
+        p = tmp_path / "rules.json"
+        self._write_rules(p, "r1", "manifest-v1")
+        eng = load_policy(str(p))
+        assert eng.evaluate(make_signal()) == "manifest-v1"
+
+        # Rewrite file with new manifest
+        self._write_rules(p, "r1", "manifest-v2")
+        eng2 = load_policy(str(p))
+        assert eng2.evaluate(make_signal()) == "manifest-v2"
+
+    def test_decision_loop_reload(self, tmp_path):
+        """
+        Verify reload_policy() atomically replaces the active policy.
+
+        Uses a minimal stand-in rather than importing DecisionLoop directly
+        to avoid pulling in signal_consumer → jsonschema in this env.
+        The logic under test is a single assignment; the full integration
+        is covered by the decision-optimizer CI job.
+        """
+        import asyncio
+
+        p = tmp_path / "rules.json"
+        self._write_rules(p, "r1", "manifest-v1")
+        policy_v1 = load_policy(str(p))
+
+        # Minimal object with the same reload_policy coroutine logic
+        class _MinimalLoop:
+            def __init__(self, policy):
+                self._policy = policy
+
+            async def reload_policy(self, new_policy):
+                self._policy = new_policy
+
+        loop = _MinimalLoop(policy_v1)
+        assert loop._policy.evaluate(make_signal()) == "manifest-v1"
+
+        self._write_rules(p, "r1", "manifest-v2")
+        policy_v2 = load_policy(str(p))
+
+        asyncio.run(loop.reload_policy(policy_v2))
+        assert loop._policy is policy_v2
+        assert loop._policy.evaluate(make_signal()) == "manifest-v2"

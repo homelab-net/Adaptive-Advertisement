@@ -42,8 +42,8 @@ class ManifestStore:
     """
     In-memory manifest registry.
 
-    All mutations (put, load_from_disk) should be called from the single asyncio
-    event loop thread; no explicit locking is used.
+    All mutations (put, load_from_disk, reload) should be called from the single
+    asyncio event loop thread; no explicit locking is used.
     """
 
     def __init__(self) -> None:
@@ -91,6 +91,33 @@ class ManifestStore:
             "manifest store loaded %d manifest(s) from %s", loaded, store_path
         )
         return loaded
+
+    def reload(self) -> int:
+        """
+        Full-replace rescan of MANIFEST_STORE_PATH.
+
+        Clears all current manifests, then calls load_from_disk().
+        Manifests removed from disk are evicted; manifests added to disk are
+        ingested.  Returns the count of manifests after the reload.
+
+        Use full-replace rather than merge so that disabling a manifest in
+        the dashboard (which removes the file) takes effect on the next cycle.
+        """
+        old_ids = set(self._manifests.keys())
+        self._manifests.clear()
+        count = self.load_from_disk()
+        new_ids = set(self._manifests.keys())
+
+        evicted = old_ids - new_ids
+        added = new_ids - old_ids
+        if evicted:
+            log.info("manifest reload: evicted %d manifest(s): %s", len(evicted), sorted(evicted))
+        if added:
+            log.info("manifest reload: added %d manifest(s): %s", len(added), sorted(added))
+        if not evicted and not added:
+            log.debug("manifest reload: no changes (count=%d)", count)
+
+        return count
 
     def put(self, manifest: dict) -> Optional[str]:
         """

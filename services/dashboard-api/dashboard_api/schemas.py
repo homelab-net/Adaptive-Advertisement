@@ -211,11 +211,9 @@ class SafeModeRequest(BaseModel):
 
 class AnalyticsSummaryOut(BaseModel):
     """
-    Privacy-safe aggregated analytics summary.
+    Privacy-safe aggregated analytics summary from audience_snapshots.
 
     Rolling-window counts only — no individual tracking, no PII.
-    Populated from audience-state signals stored in audit_events or
-    a future analytics sink table.
     """
     window_description: str = "rolling 1 hour"
     sampled_at: datetime
@@ -227,122 +225,41 @@ class AnalyticsSummaryOut(BaseModel):
     data_available: bool
 
 
-class ManifestStatsOut(BaseModel):
-    """
-    Per-manifest aggregate performance metrics.
-
-    PLACEHOLDER: data_available=False until ImpressionRecorder populates
-    impression_events (requires ICD-9 player events live on MQTT).
-    All numeric fields are None when data_available=False.
-    """
-    manifest_id: str
-    title: Optional[str] = None
-    status: Optional[str] = None
-    total_impressions: int = 0
-    # Average number of persons detected at impression start
-    avg_audience_count: Optional[float] = None
-    # Average impression duration in milliseconds
-    avg_duration_ms: Optional[float] = None
-    # Fraction of impressions where dwell_elapsed=true (0.0–1.0)
-    dwell_completion_rate: Optional[float] = None
-    # Sum of audience_count across all impressions (person-count × impressions proxy)
-    total_reach: int = 0
-    last_impression_at: Optional[datetime] = None
-    # "up" | "down" | "flat" | "insufficient_data"
-    trend_direction: str = "insufficient_data"
-    data_available: bool = False
-
-
-class ManifestStatsListOut(BaseModel):
-    items: list[ManifestStatsOut]
-    data_available: bool
-
-
-class HourlyBucket(BaseModel):
-    """One hourly time-series bucket for a manifest."""
-    hour: datetime
-    impressions: int
-    reach: int
-    dwell_rate: Optional[float] = None  # None when no impressions in bucket
-
-
-class AudienceCompositionOut(BaseModel):
-    """
-    Average age-group distribution across impressions for one manifest.
-    Fractions 0.0–1.0; suppressed_pct = fraction of impressions with demographics suppressed.
-    Privacy: coarse bins only; no individual records.
-    """
-    child: Optional[float] = None
-    young_adult: Optional[float] = None
-    adult: Optional[float] = None
-    senior: Optional[float] = None
-    suppressed_pct: float = 0.0
-
-
-class RecentImpressionOut(BaseModel):
-    """Lightweight impression summary for the detail view impression log."""
+class PlayEventOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    started_at: datetime
-    ended_at: Optional[datetime] = None
-    duration_ms: Optional[int] = None
-    audience_count: Optional[int] = None
-    audience_confidence: Optional[float] = None
-    dwell_elapsed: Optional[bool] = None
-    ended_reason: Optional[str] = None
-
-
-class ManifestDetailOut(BaseModel):
-    """
-    Full per-manifest analytics detail including trend + audience composition.
-
-    PLACEHOLDER: hourly_series and audience_composition are empty until
-    ImpressionRecorder is live (DASHBOARD_MQTT_ENABLED=true + ICD-9 events).
-    """
     manifest_id: str
-    title: Optional[str] = None
-    status: Optional[str] = None
-    stats: ManifestStatsOut
-    hourly_series: list[HourlyBucket] = Field(default_factory=list)
-    audience_composition: Optional[AudienceCompositionOut] = None
-    recent_impressions: list[RecentImpressionOut] = Field(default_factory=list)
-    data_available: bool = False
+    activated_at: datetime
+    reason: Optional[str] = None
+    prev_manifest_id: Optional[str] = None
+    received_at: datetime
 
 
-class ComparisonMetrics(BaseModel):
-    """
-    Side-by-side deltas between manifest A and manifest B.
-
-    dwell_rate_delta = A.dwell_completion_rate - B.dwell_completion_rate
-    Positive value = A outperforms B on dwell.
-    """
-    dwell_rate_delta: Optional[float] = None
-    reach_delta: Optional[int] = None
-    impression_delta: Optional[int] = None
-    avg_audience_delta: Optional[float] = None
-    dominant_segment_a: Optional[str] = None  # highest age bin for A
-    dominant_segment_b: Optional[str] = None  # highest age bin for B
-    segments_overlap: list[str] = Field(default_factory=list)
-    # "high" (≥30 impressions each) | "moderate" (10–29) | "low" (<10)
-    confidence: str = "low"
-
-
-class CompareOut(BaseModel):
-    """
-    A/B comparison response.
-
-    PLACEHOLDER: all fields are None/empty until ImpressionRecorder is live.
-    """
-    manifest_a: ManifestStatsOut
-    manifest_b: ManifestStatsOut
-    comparison: ComparisonMetrics
-    data_available: bool = False
-
-
-class ImpressionListOut(BaseModel):
-    items: list[RecentImpressionOut]
+class PlayEventListOut(BaseModel):
+    items: list[PlayEventOut]
     pagination: Pagination
+
+
+class CampaignAnalyticsOut(BaseModel):
+    """Impression summary for a single campaign."""
+    campaign_id: str
+    campaign_name: str
+    total_impressions: int
+    manifest_breakdown: list[dict[str, Any]]  # [{manifest_id, impressions}]
+    window_start: Optional[datetime] = None
+    window_end: Optional[datetime] = None
+
+
+class UptimeSummaryOut(BaseModel):
+    """Player uptime summary for SLO tracking."""
+    window_description: str
+    sampled_at: datetime
+    total_probes: int
+    healthy_probes: int
+    uptime_pct: Optional[float] = None  # None when no data
+    slo_target_pct: float = 99.5
+    slo_met: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------

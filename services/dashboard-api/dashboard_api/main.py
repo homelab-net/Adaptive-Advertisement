@@ -5,8 +5,10 @@ Startup sequence
 ----------------
 1. Validate DB connectivity — fail fast if database is unreachable on start.
 2. Mount routers (manifests, assets, campaigns, system, analytics, health).
-3. Expose OpenAPI docs at /docs (FastAPI default; useful over WireGuard VPN).
-4. Start uvicorn.
+3. Start MQTT analytics sinks and uptime probe as background tasks
+   (guarded by settings.mqtt_sinks_enabled).
+4. Expose OpenAPI docs at /docs (FastAPI default; useful over WireGuard VPN).
+5. Start uvicorn.
 
 Architecture notes
 ------------------
@@ -18,6 +20,7 @@ Architecture notes
   If dashboard-api is restarted, player and decision services continue
   operating with their last known state.
 """
+import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -37,21 +40,13 @@ from .routers.campaigns import router as campaigns_router
 from .routers.system import router as system_router
 from .routers.analytics import router as analytics_router
 from .routers.fallback import router as fallback_router
-from .impression_recorder import ImpressionRecorder
 
 setup_logging("dashboard-api", settings.log_level)
 log = logging.getLogger(__name__)
 
-# Module-level recorder instance — started in lifespan, stopped on shutdown.
-# PLACEHOLDER: ImpressionRecorder is a no-op until DASHBOARD_MQTT_ENABLED=true.
-# See impression_recorder.py for full activation requirements.
-_impression_recorder: ImpressionRecorder | None = None
-
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    global _impression_recorder
-
     # --- startup ---
     log.info("dashboard-api starting — db=%s", settings.database_url[:40])
     from .db import engine, AsyncSessionLocal
@@ -65,18 +60,29 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "database not reachable at startup: %s — service will retry via readyz", exc
         )
 
-    # Start ImpressionRecorder (MQTT subscriber for ICD-3 + ICD-9).
-    # PLACEHOLDER: no-op when DASHBOARD_MQTT_ENABLED=false (default).
-    # Set DASHBOARD_MQTT_ENABLED=true once Mosquitto, player ICD-9 events,
-    # and input-cv + audience-state are all running on hardware.
-    _impression_recorder = ImpressionRecorder(AsyncSessionLocal)
-    await _impression_recorder.start()
+    # Start analytics sinks if enabled
+    sink_tasks: list[asyncio.Task] = []
+    if settings.mqtt_sinks_enabled:
+        from .audience_sink import run_audience_sink
+        from .play_event_sink import run_play_event_sink
+        from .uptime_sink import run_uptime_sink
+
+        sink_tasks.append(asyncio.create_task(run_audience_sink(), name="audience-sink"))
+        sink_tasks.append(asyncio.create_task(run_play_event_sink(), name="play-event-sink"))
+        sink_tasks.append(asyncio.create_task(run_uptime_sink(), name="uptime-sink"))
+        log.info("analytics sinks started (%d tasks)", len(sink_tasks))
+    else:
+        log.info("analytics sinks disabled (DASHBOARD_MQTT_SINKS_ENABLED=false)")
 
     yield  # application is running
 
     # --- shutdown ---
-    if _impression_recorder is not None:
-        await _impression_recorder.stop()
+    for task in sink_tasks:
+        task.cancel()
+    if sink_tasks:
+        await asyncio.gather(*sink_tasks, return_exceptions=True)
+        log.info("analytics sink tasks stopped")
+
     await engine.dispose()
     log.info("dashboard-api stopped")
 

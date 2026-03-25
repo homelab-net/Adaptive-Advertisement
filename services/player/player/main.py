@@ -30,6 +30,7 @@ from . import config
 from .fallback import FallbackBundle, FallbackBundleMissingError
 from .manifest_store import ManifestStore
 from .command_handler import CommandHandler
+from .play_event_publisher import PlayEventPublisher
 from .renderer import create_renderer, RendererBase, RendererError, RendererStartupError
 from .state import StateMachine, TransitionResult, PlayerState
 from .health import make_health_app
@@ -223,10 +224,13 @@ async def run() -> None:
 
     on_transition_holder[0] = on_transition  # expose to supervisor control endpoint (ICD-8)
 
+    play_event_publisher = PlayEventPublisher()
+
     command_handler = CommandHandler(
         state_machine=state_machine,
         manifest_store=manifest_store,
         on_transition=on_transition,
+        play_event_publisher=play_event_publisher,
     )
 
     # Background task: periodically refresh fallback selection from library
@@ -246,14 +250,27 @@ async def run() -> None:
                 )
                 await renderer.show_fallback(fallback.asset_path)
 
+    # Background task: periodically reload manifest store (full-replace semantics)
+    async def _manifest_reload_loop() -> None:
+        interval = config.MANIFEST_RELOAD_INTERVAL_S
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                manifest_store.reload()
+            except Exception as exc:
+                log.warning("manifest reload error: %s", exc)
+
     log.info("player ready — entering command loop")
     refresh_task = asyncio.create_task(_fallback_refresh_loop(), name="fallback-refresh")
+    reload_task = asyncio.create_task(_manifest_reload_loop(), name="manifest-reload")
     try:
         await command_handler.run()
     except asyncio.CancelledError:
         log.info("player service shutting down")
     finally:
         refresh_task.cancel()
+        reload_task.cancel()
+        await asyncio.gather(refresh_task, reload_task, return_exceptions=True)
         await renderer.stop()
         await runner.cleanup()
         log.info("player service stopped")
