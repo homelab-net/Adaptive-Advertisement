@@ -51,7 +51,7 @@ def _run_alembic(command: str) -> None:
     """Run an alembic command against the test postgres URL."""
     env = {**os.environ, "DASHBOARD_DATABASE_URL": _PG_URL}
     result = subprocess.run(
-        ["python", "-m", "alembic", command],
+        ["python", "-m", "alembic"] + command.split(),
         cwd=str(_SERVICE_DIR),
         env=env,
         capture_output=True,
@@ -186,7 +186,7 @@ async def test_orm_write_read_roundtrip(pg_engine, clean_schema):
 
     os.environ["DASHBOARD_DATABASE_URL"] = _PG_URL
     # Late import so the engine picks up the overridden URL
-    from dashboard_api.models import ManifestModel  # noqa: PLC0415
+    from dashboard_api.models import Manifest  # noqa: PLC0415
 
     session_factory = async_sessionmaker(
         bind=pg_engine, expire_on_commit=False, class_=AsyncSession
@@ -196,7 +196,7 @@ async def test_orm_write_read_roundtrip(pg_engine, clean_schema):
 
     async with session_factory() as sess:
         async with sess.begin():
-            m = ManifestModel(
+            m = Manifest(
                 id=str(uuid.uuid4()),
                 manifest_id=manifest_id,
                 title="Postgres ORM smoke test",
@@ -209,7 +209,7 @@ async def test_orm_write_read_roundtrip(pg_engine, clean_schema):
 
     async with session_factory() as sess:
         from sqlalchemy import select  # noqa: PLC0415
-        from dashboard_api.models import ManifestModel as MM  # noqa: PLC0415
+        from dashboard_api.models import Manifest as MM  # noqa: PLC0415
         result = await sess.execute(
             select(MM).where(MM.manifest_id == manifest_id)
         )

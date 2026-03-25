@@ -17,6 +17,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 # Override DB URL before any dashboard_api imports
 _TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 os.environ["DASHBOARD_DATABASE_URL"] = _TEST_DB_URL
+# Point rules output to /tmp so sync-rules tests work on non-root CI runners
+os.environ.setdefault("DASHBOARD_RULES_OUTPUT_PATH", "/tmp/adaptive-ad-test-rules/generated-rules.json")
 
 from dashboard_api.main import create_app  # noqa: E402
 from dashboard_api.models import Base  # noqa: E402
