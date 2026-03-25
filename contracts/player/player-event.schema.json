@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://homelab-net.github.io/Adaptive-Advertisement/contracts/player/player-event.schema.json",
+  "title": "PlayerEvent",
+  "description": "ICD-9: Event message published by the player service to MQTT on every state transition. Consumed by dashboard-api ImpressionRecorder for impression tracking and by any future fleet telemetry subscriber. No images, frame data, or biometric identifiers are permitted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "produced_at",
+    "event_type"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "event_id": {
+      "description": "Stable unique identifier for this event. Used for deduplication.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "produced_at": {
+      "description": "UTC RFC 3339 timestamp when the state transition occurred.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "event_type": {
+      "description": "The type of player state transition.",
+      "type": "string",
+      "enum": [
+        "manifest_activated",
+        "manifest_deactivated",
+        "frozen",
+        "safe_mode_entered",
+        "safe_mode_cleared",
+        "fallback_entered"
+      ]
+    },
+    "manifest_id": {
+      "description": "The manifest that was activated or deactivated. Present for manifest_activated and manifest_deactivated events; null or absent for other event types.",
+      "type": ["string", "null"],
+      "maxLength": 128
+    },
+    "dwell_elapsed": {
+      "description": "Whether the minimum dwell time had elapsed when the manifest was deactivated. Present for manifest_deactivated events; null or absent for other event types.",
+      "type": ["boolean", "null"]
+    },
+    "rule_rationale": {
+      "description": "The ICD-4 activate_creative.rationale value that caused this manifest to be activated. Forwarded for analytics traceability. Present for manifest_activated events; null or absent for others.",
+      "type": ["string", "null"],
+      "maxLength": 128
+    }
+  }
+}

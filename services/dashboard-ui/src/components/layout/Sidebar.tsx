@@ -1,8 +1,8 @@
 import { NavLink } from 'react-router-dom'
 import {
+  Monitor,
   FileVideo,
   Megaphone,
-  Activity,
   BarChart2,
   ScrollText,
   Settings,
@@ -11,11 +11,11 @@ import {
 import { cn } from '@/lib/utils'
 
 const NAV = [
-  { to: '/system',    icon: Activity,    label: 'System' },
-  { to: '/manifests', icon: FileVideo,   label: 'Content' },
-  { to: '/campaigns', icon: Megaphone,   label: 'Campaigns' },
-  { to: '/analytics', icon: BarChart2,   label: 'Analytics' },
-  { to: '/events',    icon: ScrollText,  label: 'Audit Log' },
+  { to: '/overview',  icon: Monitor,    label: 'Overview' },
+  { to: '/content',   icon: FileVideo,  label: 'Content' },
+  { to: '/campaigns', icon: Megaphone,  label: 'Campaigns' },
+  { to: '/analytics', icon: BarChart2,  label: 'Analytics' },
+  { to: '/events',    icon: ScrollText, label: 'Audit Log' },
 ]
 
 export function Sidebar() {
