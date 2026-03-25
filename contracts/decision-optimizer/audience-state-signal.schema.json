@@ -99,6 +99,10 @@
               "description": "Number of ICD-2 cv-observation messages that contributed to this state estimate.",
               "type": "integer",
               "minimum": 0
+            },
+            "demographics_suppressed": {
+              "description": "True if demographic attributes were suppressed for this state estimate due to low confidence gating. When true, the decision-optimizer must not evaluate demographic conditions.",
+              "type": "boolean"
             }
           }
         },

@@ -363,6 +363,7 @@ class TestRuntimeLogPIILint:
                 _SERVICES_ROOT / "dashboard-api" / "dashboard_api" / "audience_sink.py",
             )
             mod = importlib.util.module_from_spec(spec2)
+            mod.__package__ = "dashboard_api"
             # Patch out imports that require DB
             import unittest.mock
             with unittest.mock.patch.dict("sys.modules", {
