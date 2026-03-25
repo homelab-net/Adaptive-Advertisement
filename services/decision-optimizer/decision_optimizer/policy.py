@@ -32,27 +32,42 @@ Rules file format (JSON)
 
 Conditions (all optional; absent conditions are not checked)
 ------------------------------------------------------------
-presence_count_gte       int   — presence.count >= value
-presence_count_lte       int   — presence.count <= value
-presence_count_eq        int   — presence.count == value
-presence_confidence_gte  float — presence.confidence >= value
+presence_count_gte           int   — presence.count >= value
+presence_count_lte           int   — presence.count <= value
+presence_count_eq            int   — presence.count == value
+presence_confidence_gte      float — presence.confidence >= value
+age_group_child_gte          float — demographics.age_groups.child >= value
+age_group_young_adult_gte    float — demographics.age_groups.young_adult >= value
+age_group_adult_gte          float — demographics.age_groups.adult >= value
+age_group_senior_gte         float — demographics.age_groups.senior >= value
+demographics_suppressed_eq   bool  — state.stability.demographics_suppressed == value
+time_hour_gte                int   — UTC hour >= value (0-23)
+time_hour_lte                int   — UTC hour <= value (0-23)
+
+Demographic conditions: if demographics_suppressed is True in the signal
+and any demographic condition is set, the rule does NOT match (privacy guard).
 
 An empty conditions dict {} always matches (catch-all / default rule).
 Rules are tried in descending priority order; the first match wins.
 If no rule matches, None is returned and the caller should hold current content.
-
-Design note: demographic conditions are out of scope for the MVP scaffold.
-They can be added here without touching any other module.
 """
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 log = logging.getLogger(__name__)
 
 _POLICY_SCHEMA_VERSION = "1.0.0"
+
+_DEMOGRAPHIC_CONDITION_FIELDS = (
+    "age_group_child_gte",
+    "age_group_young_adult_gte",
+    "age_group_adult_gte",
+    "age_group_senior_gte",
+)
 
 
 @dataclass(frozen=True)
@@ -60,16 +75,32 @@ class Rule:
     rule_id: str
     priority: int
     manifest_id: str
-    # Parsed condition values (None = condition not set)
+    # Presence conditions
     presence_count_gte: Optional[int] = None
     presence_count_lte: Optional[int] = None
     presence_count_eq: Optional[int] = None
     presence_confidence_gte: Optional[float] = None
+    # Demographic conditions (ignored when demographics_suppressed)
+    age_group_child_gte: Optional[float] = None
+    age_group_young_adult_gte: Optional[float] = None
+    age_group_adult_gte: Optional[float] = None
+    age_group_senior_gte: Optional[float] = None
+    demographics_suppressed_eq: Optional[bool] = None
+    # Time-of-day conditions (UTC hour, inclusive bounds)
+    time_hour_gte: Optional[int] = None
+    time_hour_lte: Optional[int] = None
 
-    def matches(self, signal: dict) -> bool:
+    def _has_demographic_condition(self) -> bool:
+        return any(
+            getattr(self, f) is not None for f in _DEMOGRAPHIC_CONDITION_FIELDS
+        )
+
+    def matches(self, signal: dict, now_hour: int = -1) -> bool:
         """
         Return True if all conditions in this rule are satisfied by the signal.
         A rule with no conditions always matches.
+
+        now_hour: UTC hour (0-23).  If -1 (default), derived from datetime.now(utc).
         """
         try:
             count: int = signal["state"]["presence"]["count"]
@@ -78,6 +109,7 @@ class Rule:
             log.warning("rule %s: malformed signal — skipping", self.rule_id)
             return False
 
+        # --- Presence conditions ---
         if self.presence_count_gte is not None and count < self.presence_count_gte:
             return False
         if self.presence_count_lte is not None and count > self.presence_count_lte:
@@ -86,6 +118,48 @@ class Rule:
             return False
         if self.presence_confidence_gte is not None and confidence < self.presence_confidence_gte:
             return False
+
+        # --- demographics_suppressed_eq condition ---
+        suppressed: bool = bool(
+            signal.get("state", {})
+            .get("stability", {})
+            .get("demographics_suppressed", True)
+        )
+        if self.demographics_suppressed_eq is not None:
+            if suppressed != self.demographics_suppressed_eq:
+                return False
+
+        # --- Demographic conditions ---
+        if self._has_demographic_condition():
+            # Privacy guard: if suppressed, demographic conditions cannot be evaluated
+            if suppressed:
+                return False
+            age_groups: dict = (
+                signal.get("state", {})
+                .get("demographics", {})
+                .get("age_groups", {})
+            )
+            if self.age_group_child_gte is not None:
+                if float(age_groups.get("child", 0.0)) < self.age_group_child_gte:
+                    return False
+            if self.age_group_young_adult_gte is not None:
+                if float(age_groups.get("young_adult", 0.0)) < self.age_group_young_adult_gte:
+                    return False
+            if self.age_group_adult_gte is not None:
+                if float(age_groups.get("adult", 0.0)) < self.age_group_adult_gte:
+                    return False
+            if self.age_group_senior_gte is not None:
+                if float(age_groups.get("senior", 0.0)) < self.age_group_senior_gte:
+                    return False
+
+        # --- Time-of-day conditions ---
+        if self.time_hour_gte is not None or self.time_hour_lte is not None:
+            hour = now_hour if now_hour >= 0 else datetime.now(timezone.utc).hour
+            if self.time_hour_gte is not None and hour < self.time_hour_gte:
+                return False
+            if self.time_hour_lte is not None and hour > self.time_hour_lte:
+                return False
+
         return True
 
 
@@ -102,8 +176,13 @@ class PolicyEngine:
     evaluate() can be called on every decision tick without side effects.
     """
 
-    def __init__(self, config: PolicyConfig) -> None:
+    def __init__(
+        self,
+        config: PolicyConfig,
+        _now_fn: Optional[Callable[[], datetime]] = None,
+    ) -> None:
         self._config = config
+        self._now_fn = _now_fn or (lambda: datetime.now(timezone.utc))
         # Pre-sort rules highest priority first (stable sort preserves file order on tie)
         self._rules = sorted(config.rules, key=lambda r: r.priority, reverse=True)
         log.info(
@@ -127,8 +206,9 @@ class PolicyEngine:
         Returns the manifest_id of the first matching rule, or None if no rule matches.
         None means the caller should hold current content.
         """
+        now_hour = self._now_fn().hour
         for rule in self._rules:
-            if rule.matches(signal):
+            if rule.matches(signal, now_hour=now_hour):
                 log.debug(
                     "policy match: rule=%s manifest=%s", rule.rule_id, rule.manifest_id
                 )
@@ -172,6 +252,13 @@ def load_policy(rules_file: str) -> PolicyEngine:
             presence_count_lte=cond.get("presence_count_lte"),
             presence_count_eq=cond.get("presence_count_eq"),
             presence_confidence_gte=cond.get("presence_confidence_gte"),
+            age_group_child_gte=cond.get("age_group_child_gte"),
+            age_group_young_adult_gte=cond.get("age_group_young_adult_gte"),
+            age_group_adult_gte=cond.get("age_group_adult_gte"),
+            age_group_senior_gte=cond.get("age_group_senior_gte"),
+            demographics_suppressed_eq=cond.get("demographics_suppressed_eq"),
+            time_hour_gte=cond.get("time_hour_gte"),
+            time_hour_lte=cond.get("time_hour_lte"),
         ))
 
     config = PolicyConfig(

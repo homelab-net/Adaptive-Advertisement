@@ -225,3 +225,166 @@ class TestPiiSourceScan:
             "base64 encoding inside log call detected (potential frame egress):\n"
             + "\n".join(violations)
         )
+
+
+# ── PRIV-004 runtime: captured log PII scan ───────────────────────────────────
+
+# Patterns that must never appear in any log line at runtime
+_RUNTIME_PII_PATTERNS = [
+    re.compile(r"face_embedding", re.IGNORECASE),
+    re.compile(r"frame_data", re.IGNORECASE),
+    re.compile(r"contains_images.*true", re.IGNORECASE),
+    re.compile(r"contains_frame_urls.*true", re.IGNORECASE),
+    re.compile(r"contains_face_embeddings.*true", re.IGNORECASE),
+    # Long base64-like blobs: 40+ consecutive base64 chars
+    re.compile(r"[A-Za-z0-9+/]{40,}={0,2}"),
+]
+
+
+class _CaptureHandler(logging.Handler):
+    """Logging handler that accumulates all log records."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.DEBUG)
+        self.lines: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lines.append(self.format(record))
+
+
+def _check_lines_for_pii(lines: list[str]) -> list[str]:
+    """Return list of violation descriptions, empty if clean."""
+    violations = []
+    for line in lines:
+        for pattern in _RUNTIME_PII_PATTERNS:
+            if pattern.search(line):
+                violations.append(f"pattern={pattern.pattern!r} line={line!r}")
+    return violations
+
+
+def _install_capture(root_logger: logging.Logger) -> _CaptureHandler:
+    handler = _CaptureHandler()
+    root_logger.addHandler(handler)
+    return handler
+
+
+def _remove_capture(root_logger: logging.Logger, handler: _CaptureHandler) -> None:
+    root_logger.removeHandler(handler)
+
+
+class TestRuntimeLogPIILint:
+    """
+    PRIV-004 runtime gate: exercise code paths and assert no PII appears
+    in captured log output.
+    """
+
+    def test_policy_engine_logs_no_pii(self) -> None:
+        """PolicyEngine.evaluate() must not log any PII."""
+        import sys
+        sys.path.insert(0, str(_SERVICES_ROOT / "decision-optimizer"))
+        from decision_optimizer.policy import Rule, PolicyConfig, PolicyEngine
+
+        root = logging.getLogger()
+        handler = _install_capture(root)
+        try:
+            rules = [
+                Rule("r1", priority=10, manifest_id="m-promo",
+                     presence_count_gte=1),
+                Rule("r2", priority=0, manifest_id="m-attract"),
+            ]
+            eng = PolicyEngine(PolicyConfig(rules=rules))
+            signal = {
+                "schema_version": "1.0.0",
+                "state": {
+                    "presence": {"count": 2, "confidence": 0.9},
+                    "stability": {
+                        "state_stable": True,
+                        "freeze_decision": False,
+                        "demographics_suppressed": True,
+                    },
+                    "demographics": {},
+                },
+                "source_quality": {"signal_age_ms": 100, "pipeline_degraded": False},
+                "privacy": {
+                    "contains_images": False,
+                    "contains_frame_urls": False,
+                    "contains_face_embeddings": False,
+                },
+            }
+            result = eng.evaluate(signal)
+            assert result == "m-promo"
+        finally:
+            _remove_capture(root, handler)
+
+        violations = _check_lines_for_pii(handler.lines)
+        assert not violations, (
+            "PII detected in PolicyEngine log output:\n" + "\n".join(violations)
+        )
+
+    def test_audience_sink_privacy_gate_logs_no_pii(self) -> None:
+        """
+        Audience sink privacy violation log message must not echo the PII value
+        (only the flag names, not contents).
+        """
+        import sys
+        sys.path.insert(0, str(_SERVICES_ROOT / "dashboard-api"))
+
+        # We can test _parse_snapshot directly without DB
+        import importlib
+        spec = importlib.util.spec_from_file_location(
+            "audience_sink",
+            _SERVICES_ROOT / "dashboard-api" / "dashboard_api" / "audience_sink.py",
+        )
+
+        root = logging.getLogger()
+        handler = _install_capture(root)
+        try:
+            # Craft a payload that triggers the privacy gate
+            import json as _json
+            bad_payload = _json.dumps({
+                "schema_version": "1.0.0",
+                "produced_at": "2026-01-01T00:00:00Z",
+                "state": {
+                    "presence": {"count": 1, "confidence": 0.9},
+                    "stability": {"state_stable": True},
+                },
+                "source_quality": {"pipeline_degraded": False},
+                "privacy": {
+                    "contains_images": True,       # <-- violation
+                    "contains_frame_urls": False,
+                    "contains_face_embeddings": False,
+                },
+            }).encode()
+
+            # Import and call _parse_snapshot
+            import importlib.util
+            spec2 = importlib.util.spec_from_file_location(
+                "audience_sink_mod",
+                _SERVICES_ROOT / "dashboard-api" / "dashboard_api" / "audience_sink.py",
+            )
+            mod = importlib.util.module_from_spec(spec2)
+            # Patch out imports that require DB
+            import unittest.mock
+            with unittest.mock.patch.dict("sys.modules", {
+                "dashboard_api.config": unittest.mock.MagicMock(
+                    settings=unittest.mock.MagicMock(
+                        mqtt_audience_state_topic="test",
+                        mqtt_broker_host="localhost",
+                        mqtt_broker_port=1883,
+                    )
+                ),
+                "dashboard_api.db": unittest.mock.MagicMock(),
+                "dashboard_api.models": unittest.mock.MagicMock(),
+                "aiomqtt": unittest.mock.MagicMock(),
+            }):
+                spec2.loader.exec_module(mod)
+                result = mod._parse_snapshot(bad_payload)
+
+            assert result is None, "Privacy-violating payload should return None"
+        finally:
+            _remove_capture(root, handler)
+
+        violations = _check_lines_for_pii(handler.lines)
+        assert not violations, (
+            "PII detected in audience_sink log output:\n" + "\n".join(violations)
+        )

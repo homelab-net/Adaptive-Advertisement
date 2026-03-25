@@ -39,6 +39,23 @@ class Settings(BaseSettings):
     # Drop PNGs / MP4s here; write _selected to pin one without a restart.
     fallback_library_dir: str = "/data/fallback-library"
 
+    # --- MQTT (analytics sinks) ------------------------------------------
+    mqtt_broker_host: str = "localhost"
+    mqtt_broker_port: int = 1883
+    # Topic for ICD-3 audience-state signals → audience_snapshots sink
+    mqtt_audience_state_topic: str = "adaptive/audience-state/v1"
+    # Topic for player play-event publications → play_events sink
+    mqtt_play_events_topic: str = "adaptive/play-events/v1"
+    # Set to False to disable all MQTT sinks (e.g. in unit-test environments)
+    mqtt_sinks_enabled: bool = True
+
+    # --- Uptime probe (SLO tracking) -------------------------------------
+    # How often (seconds) to probe the player /healthz for uptime tracking
+    uptime_sample_interval_s: float = 60.0
+
+    # --- Decision-optimizer admin (policy reload relay) ------------------
+    decision_optimizer_admin_url: str = "http://decision-optimizer:8003"
+
     # --- Observability ---------------------------------------------------
     log_level: str = "INFO"
 

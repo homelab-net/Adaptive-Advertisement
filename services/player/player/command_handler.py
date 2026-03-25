@@ -11,6 +11,7 @@ Responsibilities
 6. Dispatch validated commands to the StateMachine.
 7. Call on_transition() with every TransitionResult so the caller can execute the
    renderer action.
+8. Publish play-events via PlayEventPublisher on accepted activate_creative commands.
 
 Session semantics
 -----------------
@@ -31,6 +32,7 @@ import websockets.exceptions
 from . import config
 from .state import StateMachine, TransitionResult
 from .manifest_store import ManifestStore
+from .play_event_publisher import PlayEventPublisher
 
 log = logging.getLogger(__name__)
 
@@ -61,10 +63,12 @@ class CommandHandler:
         state_machine: StateMachine,
         manifest_store: ManifestStore,
         on_transition: OnTransition,
+        play_event_publisher: Optional[PlayEventPublisher] = None,
     ) -> None:
         self._sm = state_machine
         self._store = manifest_store
         self._on_transition = on_transition
+        self._publisher = play_event_publisher
         self._schema = _load_command_schema()
         self._validator = jsonschema.Draft202012Validator(self._schema)
         self._last_sequence: int = -1
@@ -194,6 +198,9 @@ class CommandHandler:
         cooldown_ms: int = payload.get("cooldown_ms", 0)
         rationale: Optional[str] = payload.get("rationale")
 
+        # Capture prev manifest before any state transition
+        prev_manifest_id: Optional[str] = self._sm.active_manifest_id
+
         manifest = self._store.get(manifest_id)
         if manifest is None:
             log.error(
@@ -225,12 +232,22 @@ class CommandHandler:
                 reason=rejection,
             )
 
-        return self._sm.on_activate_creative(
+        result = self._sm.on_activate_creative(
             manifest_id=manifest_id,
             min_dwell_ms=min_dwell_ms,
             cooldown_ms=cooldown_ms,
             rationale=rationale,
         )
+
+        # Publish play-event for accepted activations (fire-and-forget)
+        if result.accepted and self._publisher is not None:
+            self._publisher.schedule_publish(
+                manifest_id=manifest_id,
+                reason=rationale,
+                prev_manifest_id=prev_manifest_id,
+            )
+
+        return result
 
     def _validate_schema(self, msg: dict) -> Optional[str]:
         errors = list(self._validator.iter_errors(msg))

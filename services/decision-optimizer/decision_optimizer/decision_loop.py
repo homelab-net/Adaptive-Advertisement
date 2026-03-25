@@ -59,6 +59,25 @@ class DecisionLoop:
         self._freeze_count: int = 0
 
     # ------------------------------------------------------------------
+    # Policy hot-swap
+    # ------------------------------------------------------------------
+
+    async def reload_policy(self, new_policy: PolicyEngine) -> None:
+        """
+        Hot-swap the active policy engine.
+
+        Safe without a lock: asyncio is single-threaded; _tick() calls
+        policy.evaluate() synchronously with no await, so there is no
+        interleaving point where a partial swap could be observed.
+        """
+        old_count = len(self._policy._rules)
+        self._policy = new_policy
+        new_count = len(new_policy._rules)
+        log.info(
+            "policy reloaded: old_rules=%d new_rules=%d", old_count, new_count
+        )
+
+    # ------------------------------------------------------------------
     # Run loop
     # ------------------------------------------------------------------
 

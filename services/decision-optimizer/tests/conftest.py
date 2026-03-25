@@ -17,7 +17,21 @@ def make_signal(
     state_stable: bool = True,
     pipeline_degraded: bool = False,
     message_id: str = "msg-1",
+    demographics: dict | None = None,
+    demographics_suppressed: bool = True,
 ) -> dict:
+    stability: dict = {
+        "state_stable": state_stable,
+        "freeze_decision": freeze_decision,
+        "demographics_suppressed": demographics_suppressed,
+    }
+    state: dict = {
+        "presence": {"count": count, "confidence": confidence},
+        "stability": stability,
+    }
+    if demographics is not None:
+        state["demographics"] = demographics
+
     return {
         "schema_version": "1.0.0",
         "message_type": "audience_state_signal",
@@ -26,13 +40,7 @@ def make_signal(
         "tenant_id": "tenant-01",
         "site_id": "site-01",
         "camera_id": "cam-01",
-        "state": {
-            "presence": {"count": count, "confidence": confidence},
-            "stability": {
-                "state_stable": state_stable,
-                "freeze_decision": freeze_decision,
-            },
-        },
+        "state": state,
         "source_quality": {
             "signal_age_ms": 100,
             "pipeline_degraded": pipeline_degraded,

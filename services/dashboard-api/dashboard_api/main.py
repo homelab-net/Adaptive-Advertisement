@@ -5,8 +5,10 @@ Startup sequence
 ----------------
 1. Validate DB connectivity — fail fast if database is unreachable on start.
 2. Mount routers (manifests, assets, campaigns, system, analytics, health).
-3. Expose OpenAPI docs at /docs (FastAPI default; useful over WireGuard VPN).
-4. Start uvicorn.
+3. Start MQTT analytics sinks and uptime probe as background tasks
+   (guarded by settings.mqtt_sinks_enabled).
+4. Expose OpenAPI docs at /docs (FastAPI default; useful over WireGuard VPN).
+5. Start uvicorn.
 
 Architecture notes
 ------------------
@@ -18,6 +20,7 @@ Architecture notes
   If dashboard-api is restarted, player and decision services continue
   operating with their last known state.
 """
+import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -57,9 +60,29 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "database not reachable at startup: %s — service will retry via readyz", exc
         )
 
+    # Start analytics sinks if enabled
+    sink_tasks: list[asyncio.Task] = []
+    if settings.mqtt_sinks_enabled:
+        from .audience_sink import run_audience_sink
+        from .play_event_sink import run_play_event_sink
+        from .uptime_sink import run_uptime_sink
+
+        sink_tasks.append(asyncio.create_task(run_audience_sink(), name="audience-sink"))
+        sink_tasks.append(asyncio.create_task(run_play_event_sink(), name="play-event-sink"))
+        sink_tasks.append(asyncio.create_task(run_uptime_sink(), name="uptime-sink"))
+        log.info("analytics sinks started (%d tasks)", len(sink_tasks))
+    else:
+        log.info("analytics sinks disabled (DASHBOARD_MQTT_SINKS_ENABLED=false)")
+
     yield  # application is running
 
     # --- shutdown ---
+    for task in sink_tasks:
+        task.cancel()
+    if sink_tasks:
+        await asyncio.gather(*sink_tasks, return_exceptions=True)
+        log.info("analytics sink tasks stopped")
+
     await engine.dispose()
     log.info("dashboard-api stopped")
 

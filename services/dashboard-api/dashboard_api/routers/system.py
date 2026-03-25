@@ -6,6 +6,7 @@ GET  /api/v1/safe-mode  — current safe-mode state
 POST /api/v1/safe-mode  — engage safe mode
 DELETE /api/v1/safe-mode — clear safe mode
 GET  /api/v1/events     — paginated audit log
+POST /api/v1/policy/reload — hot-swap policy rules in decision-optimizer
 
 Safe-mode intent is stored in the safe_mode_state singleton row.
 The supervisor (ICD-8) is responsible for reading this and relaying the
@@ -263,3 +264,33 @@ async def list_events(
             pages=max(1, (total + page_size - 1) // page_size),
         ),
     )
+
+
+@router.post("/api/v1/policy/reload", status_code=status.HTTP_200_OK)
+async def reload_policy() -> dict:
+    """
+    Relay a hot-swap request to the decision-optimizer admin endpoint.
+
+    The decision-optimizer reloads its rules file from disk atomically.
+    Returns the response from the optimizer or a 502 if unreachable.
+    """
+    url = settings.decision_optimizer_admin_url.rstrip("/") + "/api/v1/rules/reload"
+    try:
+        async with aiohttp.ClientSession() as http:
+            async with http.post(
+                url,
+                timeout=aiohttp.ClientTimeout(total=5.0),
+            ) as resp:
+                body = await resp.json()
+                if resp.status != 200:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"decision-optimizer returned HTTP {resp.status}: {body}",
+                    )
+                log.info("policy reload relayed: %s", body)
+                return body
+    except aiohttp.ClientError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"decision-optimizer unreachable: {exc}",
+        ) from exc

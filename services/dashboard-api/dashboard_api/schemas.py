@@ -211,11 +211,9 @@ class SafeModeRequest(BaseModel):
 
 class AnalyticsSummaryOut(BaseModel):
     """
-    Privacy-safe aggregated analytics summary.
+    Privacy-safe aggregated analytics summary from audience_snapshots.
 
     Rolling-window counts only — no individual tracking, no PII.
-    Populated from audience-state signals stored in audit_events or
-    a future analytics sink table.
     """
     window_description: str = "rolling 1 hour"
     sampled_at: datetime
@@ -225,6 +223,43 @@ class AnalyticsSummaryOut(BaseModel):
     # Demographic distribution: coarse bins only, no individual records
     age_distribution: Optional[dict[str, float]] = None
     data_available: bool
+
+
+class PlayEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    manifest_id: str
+    activated_at: datetime
+    reason: Optional[str] = None
+    prev_manifest_id: Optional[str] = None
+    received_at: datetime
+
+
+class PlayEventListOut(BaseModel):
+    items: list[PlayEventOut]
+    pagination: Pagination
+
+
+class CampaignAnalyticsOut(BaseModel):
+    """Impression summary for a single campaign."""
+    campaign_id: str
+    campaign_name: str
+    total_impressions: int
+    manifest_breakdown: list[dict[str, Any]]  # [{manifest_id, impressions}]
+    window_start: Optional[datetime] = None
+    window_end: Optional[datetime] = None
+
+
+class UptimeSummaryOut(BaseModel):
+    """Player uptime summary for SLO tracking."""
+    window_description: str
+    sampled_at: datetime
+    total_probes: int
+    healthy_probes: int
+    uptime_pct: Optional[float] = None  # None when no data
+    slo_target_pct: float = 99.5
+    slo_met: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------
