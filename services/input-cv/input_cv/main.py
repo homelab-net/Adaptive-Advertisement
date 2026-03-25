@@ -30,7 +30,7 @@ import sys
 import time
 
 from input_cv.config import load_camera_config
-from input_cv.health import HealthTracker
+from input_cv.health import HealthTracker, HealthServer
 from input_cv.observation import ObservationContext, PrivacyViolationError, build_observation
 from input_cv.pipeline import DeviceNotFoundError, PipelineReadError
 from input_cv.publisher import MqttPublisher
@@ -117,6 +117,11 @@ def run(
     obs_topic = f"cv/v1/observations/{tenant_id}/{site_id}/{config.camera_id}"
 
     health = HealthTracker(camera_id=config.camera_id, pipeline_id=pipeline_id)
+
+    health_port = int(os.environ.get("INPUT_CV_HEALTH_PORT", "8006"))
+    health_server = HealthServer(health, port=health_port)
+    health_server.start()
+
     reopen_loop = ReopenLoop(
         health=health,
         initial_backoff_ms=config.reopen.initial_backoff_ms,
@@ -147,6 +152,7 @@ def run(
 
     publisher.connect()
     logger.info("input-cv: MQTT publisher connected; topic=%s", obs_topic)
+    health_server.mark_ready()
 
     try:
         while not shutdown:

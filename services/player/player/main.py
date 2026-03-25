@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+import aiomqtt
 from aiohttp import web
 from adaptive_shared.log_config import setup_logging
 
@@ -164,30 +165,59 @@ async def run() -> None:
 
     # ICD-9 event publisher — publishes state transitions to MQTT so that
     # dashboard-api ImpressionRecorder can build impression_events rows.
-    # PLACEHOLDER: set PLAYER_MQTT_ENABLED=true and ensure Mosquitto is
-    # reachable before the first pilot. Until then event_publisher is a
-    # no-op (no client is set) and no MQTT traffic is produced.
     event_publisher = PlayerEventPublisher()
     _prev_manifest_id: list[Optional[str]] = [None]  # track for deactivation events
 
+    async def _run_mqtt_client() -> None:
+        """
+        Background task: maintain MQTT connection for ICD-9 event publishing.
+
+        Reconnects with exponential backoff on broker errors.  Cancelled
+        cleanly on shutdown.  Sets/clears the client reference on
+        PlayerEventPublisher so publish calls are no-ops while disconnected.
+        """
+        backoff = 2.0
+        while True:
+            try:
+                async with aiomqtt.Client(
+                    hostname=config.MQTT_BROKER_HOST,
+                    port=config.MQTT_BROKER_PORT,
+                ) as client:
+                    backoff = 2.0
+                    event_publisher.set_client(client)
+                    log.info(
+                        "ICD-9 MQTT client connected broker=%s:%d",
+                        config.MQTT_BROKER_HOST,
+                        config.MQTT_BROKER_PORT,
+                    )
+                    # Keep the context (and connection) alive until cancelled or error
+                    await asyncio.sleep(float("inf"))
+            except asyncio.CancelledError:
+                event_publisher.clear_client()
+                log.info("ICD-9 MQTT client task stopped")
+                return
+            except aiomqtt.MqttError as exc:
+                event_publisher.clear_client()
+                log.warning(
+                    "ICD-9 MQTT connection lost: %s — reconnecting in %.0fs", exc, backoff
+                )
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 60.0)
+            except Exception as exc:  # noqa: BLE001
+                event_publisher.clear_client()
+                log.error(
+                    "ICD-9 MQTT unexpected error: %s — reconnecting in %.0fs", exc, backoff
+                )
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 60.0)
+
+    mqtt_task: Optional[asyncio.Task] = None
     if config.MQTT_ENABLED:
-        # PLACEHOLDER: wire aiomqtt.Client here for ICD-9 event publishing.
-        # Pattern to follow: audience-state signal_publisher.py which uses
-        # the same broker. Add to player's startup once aiomqtt is in
-        # services/player/requirements.txt.
-        #
-        # Example (to add when ready):
-        #   import aiomqtt
-        #   mqtt_client = aiomqtt.Client(
-        #       hostname=config.MQTT_BROKER_HOST,
-        #       port=config.MQTT_BROKER_PORT,
-        #   )
-        #   await mqtt_client.__aenter__()
-        #   event_publisher.set_client(mqtt_client)
-        log.warning(
-            "PLAYER_MQTT_ENABLED=true but aiomqtt client wiring is a PLACEHOLDER. "
-            "ICD-9 events will not be published until aiomqtt is added to "
-            "requirements.txt and the client is initialised here."
+        mqtt_task = asyncio.create_task(_run_mqtt_client(), name="icd9-mqtt-client")
+        log.info(
+            "ICD-9 MQTT event publisher task started (broker=%s:%d)",
+            config.MQTT_BROKER_HOST,
+            config.MQTT_BROKER_PORT,
         )
     else:
         log.info(
@@ -270,7 +300,11 @@ async def run() -> None:
     finally:
         refresh_task.cancel()
         reload_task.cancel()
-        await asyncio.gather(refresh_task, reload_task, return_exceptions=True)
+        tasks_to_cancel = [refresh_task, reload_task]
+        if mqtt_task is not None:
+            mqtt_task.cancel()
+            tasks_to_cancel.append(mqtt_task)
+        await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
         await renderer.stop()
         await runner.cleanup()
         log.info("player service stopped")

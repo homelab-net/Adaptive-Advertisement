@@ -32,10 +32,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import settings
 from ..db import get_session
 from ..events import write_event, SAFE_MODE_ENGAGED, SAFE_MODE_CLEARED
-from ..models import SafeModeState, AuditEvent
+from ..models import SafeModeState, AuditEvent, AudienceSnapshot, PlayEvent
 from ..schemas import (
     SystemStatusOut, ServiceProbe, SafeModeInfo,
     SafeModeRequest, AuditEventOut, AuditEventListOut, Pagination,
+    CvLiveOut, DemographicsLiveOut, PlayerLiveOut, LiveStatusOut,
 )
 
 log = logging.getLogger(__name__)
@@ -264,6 +265,103 @@ async def list_events(
             pages=max(1, (total + page_size - 1) // page_size),
         ),
     )
+
+
+_CV_STALE_THRESHOLD_MS = 30_000  # snapshot older than 30 s is considered unavailable
+
+
+@router.get("/api/v1/live", response_model=LiveStatusOut)
+async def get_live_status(
+    db: AsyncSession = Depends(get_session),
+) -> LiveStatusOut:
+    """
+    Real-time CV pipeline and player state snapshot.
+
+    CV data comes from the most recent audience_snapshot DB row (written by
+    the audience-sink from ICD-3 MQTT signals).  Player state is inferred from
+    safe_mode_state + the latest play_event row + a /healthz probe of the player
+    service.  Returns null sub-objects when the respective data is unavailable.
+    """
+    now = datetime.now(timezone.utc)
+
+    # --- CV: latest audience snapshot ---
+    snap_result = await db.execute(
+        select(AudienceSnapshot)
+        .order_by(AudienceSnapshot.sampled_at.desc())
+        .limit(1)
+    )
+    snapshot = snap_result.scalar_one_or_none()
+
+    # --- Player: latest manifest activation + safe-mode intent ---
+    play_result = await db.execute(
+        select(PlayEvent).order_by(PlayEvent.activated_at.desc()).limit(1)
+    )
+    play_event = play_result.scalar_one_or_none()
+
+    safe_row = await _get_or_create_safe_mode(db)
+
+    # --- Probe player /healthz ---
+    async with aiohttp.ClientSession() as http:
+        player_probe = await _probe_service(
+            "player", settings.player_healthz_url, settings.health_probe_timeout_s, http
+        )
+    player_available = player_probe.status == "healthy"
+
+    # --- Build CV status ---
+    if snapshot is not None:
+        age_ms = int((now - snapshot.sampled_at).total_seconds() * 1000)
+        cv_available = age_ms < _CV_STALE_THRESHOLD_MS
+
+        age_groups: Optional[dict[str, float]] = None
+        if not snapshot.demographics_suppressed:
+            age_groups = {
+                k: v
+                for k, v in {
+                    "child": snapshot.age_group_child,
+                    "young_adult": snapshot.age_group_young_adult,
+                    "adult": snapshot.age_group_adult,
+                    "senior": snapshot.age_group_senior,
+                }.items()
+                if v is not None
+            } or None
+
+        cv = CvLiveOut(
+            available=cv_available,
+            count=snapshot.presence_count,
+            confidence=snapshot.presence_confidence,
+            fps=None,
+            inference_ms=None,
+            signal_age_ms=age_ms,
+            state_stable=snapshot.state_stable,
+            freeze_decision=not snapshot.state_stable,
+            demographics=DemographicsLiveOut(
+                age_group=age_groups,
+                suppressed=snapshot.demographics_suppressed,
+            ),
+        )
+    else:
+        cv = CvLiveOut(available=False)
+
+    # --- Build player status ---
+    if safe_row.is_active:
+        player_state: Optional[str] = "safe_mode"
+    elif player_available and play_event is not None:
+        player_state = "active"
+    elif player_available:
+        player_state = "fallback"
+    else:
+        player_state = None
+
+    player = PlayerLiveOut(
+        available=player_available,
+        state=player_state,
+        active_manifest_id=play_event.manifest_id if play_event else None,
+        dwell_elapsed=None,
+        freeze_reason=None,
+        safe_mode_reason=safe_row.reason if safe_row.is_active else None,
+    )
+
+    return LiveStatusOut(cv=cv, player=player)
 
 
 @router.post("/api/v1/policy/reload", status_code=status.HTTP_200_OK)
