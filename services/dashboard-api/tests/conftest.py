@@ -23,7 +23,7 @@ from dashboard_api.models import Base  # noqa: E402
 from dashboard_api.db import get_session  # noqa: E402
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def engine():
     eng = create_async_engine(_TEST_DB_URL, echo=False)
     async with eng.begin() as conn:

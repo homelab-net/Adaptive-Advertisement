@@ -111,11 +111,11 @@ class TestLiveFreshSnapshot:
         # Note: session fixture rolls back after each test
 
     async def test_cv_available(self, client: AsyncClient, session):
-        # Re-seed for the client's own session
-        async with client.app.dependency_overrides[
-            __import__("dashboard_api.db", fromlist=["get_session"]).get_session
-        ].__wrapped__() if False else _mock_player_probe(healthy=True) as _:
-            pass
+        # Snapshot seeded via autouse seed_snapshot fixture (session fixture rolls back).
+        # This test verifies the endpoint is reachable; deeper assertions are in test_cv_available_true.
+        with _mock_player_probe(healthy=True):
+            resp = await client.get("/api/v1/live")
+        assert resp.status_code == 200
 
         # Simpler: just hit the endpoint with its real session and seeded data
         # The client fixture uses a separate session factory; seed via client's session.
@@ -225,7 +225,7 @@ class TestLivePlayerState:
         from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
         factory = async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
         async with factory() as s:
-            s.merge(SafeModeState(
+            await s.merge(SafeModeState(
                 id=1,
                 is_active=True,
                 reason="operator override",
@@ -242,7 +242,7 @@ class TestLivePlayerState:
 
         # Cleanup safe mode for subsequent tests
         async with factory() as s:
-            s.merge(SafeModeState(id=1, is_active=False))
+            await s.merge(SafeModeState(id=1, is_active=False))
             await s.commit()
 
     async def test_player_safe_mode_reason_null_when_not_active(self, client, engine):
