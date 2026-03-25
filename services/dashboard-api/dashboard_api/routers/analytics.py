@@ -153,13 +153,17 @@ async def get_campaign_analytics(
     if campaign_row is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # Get manifest_ids for this campaign
-    cm_rows = (
+    # Get ICD-5 manifest_id strings for this campaign by joining through the
+    # manifests table (CampaignManifest.manifest_id is FK → manifests.id UUID)
+    from ..models import Manifest
+    icd5_id_rows = (
         await db.execute(
-            select(CampaignManifest).where(CampaignManifest.campaign_id == campaign_id)
+            select(Manifest.manifest_id)
+            .join(CampaignManifest, Manifest.id == CampaignManifest.manifest_id)
+            .where(CampaignManifest.campaign_id == campaign_id)
         )
-    ).scalars().all()
-    manifest_ids = [cm.manifest_id for cm in cm_rows]
+    ).all()
+    manifest_ids = [row[0] for row in icd5_id_rows]
 
     breakdown = []
     total_impressions = 0

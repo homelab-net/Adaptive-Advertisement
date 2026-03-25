@@ -17,15 +17,14 @@ def _write_manifest(path: Path, manifest_id: str) -> None:
     manifest = {
         "schema_version": "1.0.0",
         "manifest_id": manifest_id,
-        "title": f"Test {manifest_id}",
         "approved_at": "2026-01-01T00:00:00Z",
         "approved_by": "operator",
         "items": [
             {
+                "item_id": "item-001",
                 "asset_id": "asset-001.png",
                 "asset_type": "image",
                 "duration_ms": 5000,
-                "loop": False,
             }
         ],
     }
