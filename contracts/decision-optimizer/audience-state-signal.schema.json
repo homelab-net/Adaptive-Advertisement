@@ -95,6 +95,10 @@
               "description": "True if the decision-optimizer must hold its current content selection and not switch. Driven by low confidence, rapid flux, or policy-minimum dwell not yet elapsed.",
               "type": "boolean"
             },
+            "demographics_suppressed": {
+              "description": "True if demographic attributes were suppressed for this window due to low confidence gating. When true, the decision-optimizer must not apply demographic conditions.",
+              "type": "boolean"
+            },
             "observations_in_window": {
               "description": "Number of ICD-2 cv-observation messages that contributed to this state estimate.",
               "type": "integer",
