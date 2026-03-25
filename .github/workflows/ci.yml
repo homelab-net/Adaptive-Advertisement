@@ -128,7 +128,7 @@ jobs:
 
       - name: Install dashboard-api and test deps
         working-directory: services/dashboard-api
-        run: pip install -e "." "pytest>=8.0" "pytest-asyncio>=0.23" "alembic>=1.13" "asyncpg>=0.29"
+        run: pip install -e "." "pytest>=8.0" "pytest-asyncio>=0.23" "alembic>=1.13" "asyncpg>=0.29" "httpx>=0.27" "aiosqlite>=0.20"
 
       - name: Run postgres migration tests
         working-directory: services/dashboard-api
@@ -209,10 +209,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker
 
       - name: Build service images (excluding input-cv)
         env:
@@ -305,10 +301,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker
 
       # Build all service images in parallel using compose.
       # Uses RENDERER_BACKEND=stub so no GPU or display is required.
