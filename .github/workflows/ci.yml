@@ -210,12 +210,18 @@ jobs:
       - uses: actions/checkout@v4
 
 
-      - name: Build service images (excluding input-cv)
+      - name: Diagnose Docker environment
+        run: |
+          docker info | head -20
+          docker compose version
+          docker buildx ls
+
+      - name: Build service images (excluding input-cv and image-only services)
         env:
           RENDERER_BACKEND: stub
         run: |
           docker compose build \
-            mosquitto postgres audience-state creative \
+            audience-state creative \
             decision-optimizer player supervisor dashboard-api
 
       - name: Start compose stack (excluding input-cv and dashboard-ui)
@@ -306,13 +312,18 @@ jobs:
       # Uses RENDERER_BACKEND=stub so no GPU or display is required.
       # Excludes input-cv: its base image (nvcr.io/nvidia/deepstream-l4t) is
       # not available for x86_64; it is validated on the target Jetson hardware.
-      - name: Build service images (excluding input-cv)
+      # Excludes mosquitto and postgres: image-only services with no build directive.
+      - name: Diagnose Docker environment
+        run: |
+          docker info | head -20
+          docker compose version
+          docker buildx ls
+
+      - name: Build service images (excluding input-cv and image-only services)
         env:
           RENDERER_BACKEND: stub
         run: |
           docker compose build \
-            mosquitto \
-            postgres \
             audience-state \
             creative \
             decision-optimizer \

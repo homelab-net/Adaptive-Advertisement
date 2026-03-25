@@ -72,7 +72,7 @@ def _sync_table_names(conn) -> set[str]:
 # Fixtures
 # ---------------------------------------------------------------------------
 
-@pytest_asyncio.fixture(scope="module")
+@pytest_asyncio.fixture
 async def pg_engine():
     """Create an async engine for the test postgres instance."""
     engine = create_async_engine(_PG_URL, echo=False, pool_pre_ping=True)
