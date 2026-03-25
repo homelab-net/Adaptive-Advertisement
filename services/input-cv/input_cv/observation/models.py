@@ -71,8 +71,8 @@ class ObservationCounts(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    persons: int = Field(ge=0, default=0)
-    confidence_mean: float = Field(ge=0.0, le=1.0, default=0.0)
+    present: int = Field(ge=0, default=0)
+    confidence: float = Field(ge=0.0, le=1.0, default=0.0)
 
 
 class CvObservation(BaseModel):

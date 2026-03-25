@@ -1,0 +1,322 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Cancel superseded runs on the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Contract tests — validate all ICD JSON schemas directly (no service deps)
+  # ---------------------------------------------------------------------------
+  contract-tests:
+    name: Contract tests (all ICDs)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test deps
+        run: pip install jsonschema>=4.21 pytest>=8.0
+
+      - name: Run contract tests
+        run: python -m pytest tests/contract/ -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Unit tests — one job per service
+  # ---------------------------------------------------------------------------
+  unit-tests:
+    name: Unit tests — ${{ matrix.service }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: input-cv
+            path: services/input-cv
+            extra_deps: "pytest>=8.2 pytest-timeout>=2.3 freezegun>=1.5"
+
+          - service: audience-state
+            path: services/audience-state
+            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23"
+
+          - service: decision-optimizer
+            path: services/decision-optimizer
+            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23"
+
+          - service: player
+            path: services/player
+            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23"
+
+          - service: creative
+            path: services/creative
+            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23"
+
+          - service: supervisor
+            path: services/supervisor
+            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23 aiohttp>=3.9"
+
+          - service: dashboard-api
+            path: services/dashboard-api
+            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23 httpx>=0.27 aiosqlite>=0.20 alembic>=1.13"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install shared utilities
+        run: pip install -e services/shared
+
+      - name: Install ${{ matrix.service }} and test deps
+        working-directory: ${{ matrix.path }}
+        run: pip install -e "." ${{ matrix.extra_deps }}
+
+      - name: Run unit tests
+        working-directory: ${{ matrix.path }}
+        env:
+          RENDERER_BACKEND: stub   # player: use stub renderer, not mpv
+        run: python -m pytest tests/ -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # dashboard-api postgres migration tests — requires real PostgreSQL
+  # ---------------------------------------------------------------------------
+  dashboard-api-postgres:
+    name: dashboard-api postgres migrations (ICD-7)
+    runs-on: ubuntu-22.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dashboard
+          POSTGRES_PASSWORD: dashboard
+          POSTGRES_DB: dashboard_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dashboard"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dashboard-api and test deps
+        working-directory: services/dashboard-api
+        run: pip install -e "." pytest>=8.0 pytest-asyncio>=0.23 alembic>=1.13 asyncpg>=0.29
+
+      - name: Run postgres migration tests
+        working-directory: services/dashboard-api
+        env:
+          DASHBOARD_POSTGRES_TEST_URL: "postgresql+asyncpg://dashboard:dashboard@localhost:5432/dashboard_test"
+        run: python -m pytest tests/test_postgres_migration.py -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Integration tests — all services installed in-process, no Docker
+  # ---------------------------------------------------------------------------
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-22.04
+    needs: [contract-tests, unit-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install all service packages
+        run: |
+          pip install \
+            -e services/shared \
+            -e services/input-cv \
+            -e services/audience-state \
+            -e services/decision-optimizer \
+            -e services/player \
+            -e services/creative \
+            -e services/supervisor
+
+      - name: Install integration test deps
+        run: |
+          pip install \
+            pytest>=8.0 \
+            pytest-asyncio>=0.23 \
+            aiohttp>=3.9 \
+            jsonschema>=4.21
+
+      - name: Run integration tests
+        env:
+          RENDERER_BACKEND: stub
+        # Root pyproject.toml sets asyncio_mode=auto required by ICD-4 e2e tests
+        run: python -m pytest tests/integration/ -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Golden-image hygiene — no hardcoded secrets, IPs, or placeholder tokens
+  # ---------------------------------------------------------------------------
+  hygiene-tests:
+    name: Golden-image hygiene (no hardcoded values)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test deps
+        run: pip install pytest>=8.0 pydantic-settings>=2.0
+
+      - name: Run hardcoded-value gate
+        run: python -m pytest tests/test_no_hardcoded_values.py -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Compose stack smoke test — builds, starts, and health-checks all non-GPU
+  # services in a real multi-container environment.
+  # ---------------------------------------------------------------------------
+  compose-smoke:
+    name: Compose stack smoke test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build service images (excluding input-cv)
+        env:
+          RENDERER_BACKEND: stub
+        run: |
+          docker compose build \
+            mosquitto postgres audience-state creative \
+            decision-optimizer player supervisor dashboard-api
+
+      - name: Start compose stack (excluding input-cv and dashboard-ui)
+        env:
+          RENDERER_BACKEND: stub
+        run: |
+          docker compose up -d \
+            mosquitto postgres dashboard-db-migrate \
+            audience-state creative decision-optimizer \
+            player supervisor dashboard-api
+
+      - name: Wait for all services to become healthy (90 s max)
+        run: |
+          echo "Polling service /healthz endpoints..."
+          for attempt in $(seq 1 18); do
+            printf "  attempt %d/18 —" "$attempt"
+            ALL_HEALTHY=true
+            for port in 8080 8081 8082 8090 8091 8004; do
+              if curl -sf "http://localhost:$port/healthz" >/dev/null 2>&1; then
+                printf " %d✓" "$port"
+              else
+                printf " %d✗" "$port"
+                ALL_HEALTHY=false
+              fi
+            done
+            echo ""
+            $ALL_HEALTHY && echo "All services healthy." && exit 0
+            sleep 5
+          done
+          echo "ERROR: services did not become healthy within 90 s" >&2
+          docker compose ps
+          docker compose logs --no-color --tail=50
+          exit 1
+
+      - name: Verify /healthz — all services return {status:ok}
+        run: |
+          declare -A NAMES=(
+            [8080]="player"
+            [8081]="decision-optimizer"
+            [8082]="audience-state"
+            [8090]="creative"
+            [8091]="supervisor"
+            [8004]="dashboard-api"
+          )
+          for port in 8080 8081 8082 8090 8091 8004; do
+            echo "  ${NAMES[$port]} (port $port) /healthz"
+            curl -sf "http://localhost:$port/healthz" \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('status')=='ok', d"
+            echo "    ✓"
+          done
+
+      - name: Verify /metrics — all services expose Prometheus metrics
+        run: |
+          declare -A NAMES=(
+            [8080]="player"
+            [8081]="decision-optimizer"
+            [8082]="audience-state"
+            [8090]="creative"
+            [8091]="supervisor"
+            [8004]="dashboard-api"
+          )
+          for port in 8080 8081 8082 8090 8091 8004; do
+            echo "  ${NAMES[$port]} (port $port) /metrics"
+            curl -sf "http://localhost:$port/metrics" | grep -q "^# HELP" \
+              || { echo "ERROR: no Prometheus metrics on port $port" >&2; exit 1; }
+            echo "    ✓"
+          done
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=100
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  # ---------------------------------------------------------------------------
+  # Docker image build validation — catches Dockerfile regressions before hardware
+  # ---------------------------------------------------------------------------
+  build-images:
+    name: Docker image build validation
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build all service images in parallel using compose.
+      # Uses RENDERER_BACKEND=stub so no GPU or display is required.
+      # Excludes input-cv: its base image (nvcr.io/nvidia/deepstream-l4t) is
+      # not available for x86_64; it is validated on the target Jetson hardware.
+      - name: Build service images (excluding input-cv)
+        env:
+          RENDERER_BACKEND: stub
+        run: |
+          docker compose build \
+            mosquitto \
+            postgres \
+            audience-state \
+            creative \
+            decision-optimizer \
+            player \
+            supervisor \
+            dashboard-api \
+            dashboard-ui

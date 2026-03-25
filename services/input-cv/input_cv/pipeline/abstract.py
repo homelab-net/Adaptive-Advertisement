@@ -7,7 +7,7 @@ only on PipelineDriver. They have no direct imports of pyds or GStreamer.
 Contract for read_metadata() return value:
   - list of dicts
   - each dict represents one detection window
-  - permitted keys: frame_seq, person_count, confidence_mean, pipeline_fps, inference_ms
+  - permitted keys: frame_seq, person_count, confidence_mean, frames_processed, frames_dropped, pipeline_degraded
   - BANNED: frame, image, pixels, base64, embedding, face, raw, blob, jpeg, etc.
   - the pipeline driver is responsible for never producing banned keys;
     builder.py performs a final check as a defense-in-depth measure

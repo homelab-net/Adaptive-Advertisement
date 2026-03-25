@@ -38,25 +38,35 @@ from input_cv.recovery import ReopenLoop
 
 
 def _configure_logging() -> None:
+    from adaptive_shared.log_config import setup_logging
     level = os.environ.get("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S",
-    )
+    setup_logging("input-cv", level)
 
 
 def _build_pipeline_driver(config):
     """
-    Import and instantiate the DeepStream driver.
-    Fails fast with a clear message if pyds is not available.
+    Instantiate the pipeline driver selected by INPUT_CV_PIPELINE_BACKEND.
+
+    Backends:
+      deepstream (default) — requires pyds + GStreamer on Jetson.
+      null                 — NullDriver stub for simulation and CI; no hardware needed.
     """
+    backend = os.environ.get("INPUT_CV_PIPELINE_BACKEND", "deepstream").lower()
+
+    if backend == "null":
+        from input_cv.pipeline.null_driver import NullDriver  # noqa: PLC0415
+        logging.getLogger("input_cv").info(
+            "input-cv: using NullDriver simulation backend (INPUT_CV_PIPELINE_BACKEND=null)"
+        )
+        return NullDriver()
+
     try:
         from input_cv.pipeline.deepstream_driver import DeepStreamDriver  # noqa: PLC0415
     except ImportError as exc:
         raise RuntimeError(
             "DeepStream Python bindings (pyds) are not installed. "
-            "Run inside the nvcr.io DeepStream container on the target Jetson."
+            "Run inside the nvcr.io DeepStream container on the target Jetson. "
+            "Set INPUT_CV_PIPELINE_BACKEND=null to run in simulation mode."
         ) from exc
 
     return DeepStreamDriver(

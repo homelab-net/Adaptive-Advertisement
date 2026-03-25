@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://homelab-net.github.io/Adaptive-Advertisement/contracts/dashboard-api/campaign-record.schema.json",
+  "title": "CampaignRecord",
+  "description": "Campaign business object — a named grouping of approved manifests with optional scheduling (ICD-6/ICD-7).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "status",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Surrogate key (UUID v4)."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "description": {
+      "type": ["string", "null"],
+      "maxLength": 2048
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "paused", "archived"]
+    },
+    "start_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Optional ISO-8601 UTC schedule start. Null = immediate."
+    },
+    "end_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Optional ISO-8601 UTC schedule end. Null = indefinite."
+    },
+    "manifest_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Ordered list of manifest_ids belonging to this campaign (omitted in list views)."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

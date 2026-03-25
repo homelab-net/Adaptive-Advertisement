@@ -47,7 +47,7 @@ def test_banned_key_in_raw_meta_raises(banned_key: str):
 
 def test_clean_meta_builds_without_error():
     obs = build_observation(_CLEAN_META, _CONTEXT)
-    assert obs.counts.persons == 2
+    assert obs.counts.present == 2
 
 
 def test_serialized_observation_contains_no_banned_keys():

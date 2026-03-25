@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://homelab-net.github.io/Adaptive-Advertisement/contracts/audience-state/cv-observation.schema.json",
+  "title": "CvObservation",
+  "description": "Privacy-preserving CV telemetry message published from input-cv to audience-state via MQTT. ICD-2 contract. No images, frame URLs, face embeddings, or reversible biometric templates are permitted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "message_type",
+    "message_id",
+    "produced_at",
+    "tenant_id",
+    "site_id",
+    "camera_id",
+    "pipeline_id",
+    "frame_seq",
+    "window_ms",
+    "counts",
+    "quality",
+    "privacy"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "message_type": {
+      "type": "string",
+      "const": "cv_observation"
+    },
+    "message_id": {
+      "description": "Stable unique identifier for this message. Used for deduplication under MQTT QoS 1.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "produced_at": {
+      "description": "UTC RFC 3339 timestamp of observation window close.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "site_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "camera_id": {
+      "description": "Stable camera identifier, unique within a site. Must match the camera_id in the input-cv source config.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "pipeline_id": {
+      "description": "Identifier for the DeepStream pipeline instance that produced this observation.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "frame_seq": {
+      "description": "Monotonically increasing frame sequence number per camera. Used by consumers to detect gaps and handle out-of-order delivery.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "window_ms": {
+      "description": "Duration of the aggregation window this observation covers, in milliseconds.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 60000
+    },
+    "counts": {
+      "description": "Per-window person count aggregates. Not per-identity tracking data.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "confidence"],
+      "properties": {
+        "present": {
+          "description": "Estimated number of persons present during the window.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "confidence": {
+          "description": "Model confidence for the presence estimate, in range [0.0, 1.0].",
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      }
+    },
+    "demographics": {
+      "description": "Optional coarse aggregated demographic distributions. Must not contain per-person identifiers. All attributes are probabilistic bins only.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "age_group": {
+          "description": "Distribution over coarse age bins. Values are probabilities summing to approximately 1.0.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "child":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "young_adult": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "adult":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "senior":   { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+          }
+        },
+        "dwell_estimate_ms": {
+          "description": "Estimated average dwell time for persons present during the window, in milliseconds.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "suppressed": {
+          "description": "True if optional demographic attributes were suppressed due to low confidence gating.",
+          "type": "boolean"
+        }
+      }
+    },
+    "quality": {
+      "description": "Signal quality indicators for this observation window.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frames_processed", "frames_dropped"],
+      "properties": {
+        "frames_processed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frames_dropped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pipeline_degraded": {
+          "description": "True if the pipeline was in a degraded state during this window.",
+          "type": "boolean"
+        }
+      }
+    },
+    "privacy": {
+      "description": "Hard contract flags. All must be false. Schema-enforced privacy boundary.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contains_images",
+        "contains_frame_urls",
+        "contains_face_embeddings"
+      ],
+      "properties": {
+        "contains_images": {
+          "type": "boolean",
+          "const": false
+        },
+        "contains_frame_urls": {
+          "type": "boolean",
+          "const": false
+        },
+        "contains_face_embeddings": {
+          "type": "boolean",
+          "const": false
+        }
+      }
+    }
+  }
+}

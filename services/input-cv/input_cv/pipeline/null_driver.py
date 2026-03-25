@@ -27,8 +27,8 @@ class NullDriver(PipelineDriver):
                 "frame_seq": 0,
                 "person_count": 1,
                 "confidence_mean": 0.85,
-                "pipeline_fps": 10.0,
-                "inference_ms": 42.0,
+                "frames_processed": 10,
+                "frames_dropped": 0,
             }
         ]
         self._read_count = 0

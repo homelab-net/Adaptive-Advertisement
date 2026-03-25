@@ -54,7 +54,9 @@ def build_observation(raw_meta: dict, context: ObservationContext) -> CvObservat
     Args:
         raw_meta: dict from PipelineDriver.read_metadata() — must not
                   contain banned keys. Expected keys: frame_seq (int),
-                  person_count (int), confidence_mean (float).
+                  person_count (int), confidence_mean (float),
+                  frames_processed (int, default 1), frames_dropped (int, default 0),
+                  pipeline_degraded (bool, optional).
         context: deployment identity fields.
 
     Returns:
@@ -66,14 +68,16 @@ def build_observation(raw_meta: dict, context: ObservationContext) -> CvObservat
     _check_banned_keys(raw_meta)
 
     counts = ObservationCounts(
-        persons=int(raw_meta.get("person_count", 0)),
-        confidence_mean=float(raw_meta.get("confidence_mean", 0.0)),
+        present=int(raw_meta.get("person_count", 0)),
+        confidence=float(raw_meta.get("confidence_mean", 0.0)),
     )
 
-    quality = {
-        "pipeline_fps": raw_meta.get("pipeline_fps"),
-        "inference_ms": raw_meta.get("inference_ms"),
+    quality: dict = {
+        "frames_processed": int(raw_meta.get("frames_processed", 1)),
+        "frames_dropped": int(raw_meta.get("frames_dropped", 0)),
     }
+    if "pipeline_degraded" in raw_meta:
+        quality["pipeline_degraded"] = bool(raw_meta["pipeline_degraded"])
 
     return CvObservation(
         tenant_id=context.tenant_id,

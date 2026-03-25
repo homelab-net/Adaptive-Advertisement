@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://homelab-net.github.io/Adaptive-Advertisement/contracts/supervisor/service-health-report.schema.json",
+  "title": "ServiceHealthReport",
+  "description": "Supervisor health report emitted per managed service. ICD-8 contract. Used by the supervisor to track per-service liveness and restart-ladder state.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "name",
+    "is_healthy",
+    "consecutive_failures",
+    "restart_count",
+    "in_boot_loop",
+    "escalated",
+    "sampled_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "name": {
+      "description": "Logical service name (e.g. 'player', 'decision-optimizer').",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "is_healthy": {
+      "description": "True if the most recent /healthz probe returned a non-5xx response within the timeout.",
+      "type": "boolean"
+    },
+    "consecutive_failures": {
+      "description": "Number of consecutive failed health probes. Resets to 0 on first healthy probe.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "restart_count": {
+      "description": "Cumulative number of docker restart calls issued for this service since supervisor start.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "last_restart_at": {
+      "description": "UTC RFC 3339 timestamp of the most recent restart attempt, or null if never restarted.",
+      "oneOf": [
+        {"type": "string", "format": "date-time"},
+        {"type": "null"}
+      ]
+    },
+    "in_boot_loop": {
+      "description": "True when the service has been restarted >= BOOT_LOOP_THRESHOLD times within FAST_FAIL_WINDOW_S seconds. When true, supervisor stops restarting and escalates to safe mode.",
+      "type": "boolean"
+    },
+    "escalated": {
+      "description": "True when restart_count >= RESTART_THRESHOLD and the supervisor has stopped attempting further restarts pending operator intervention.",
+      "type": "boolean"
+    },
+    "sampled_at": {
+      "description": "UTC RFC 3339 timestamp when this health sample was taken.",
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

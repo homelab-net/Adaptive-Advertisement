@@ -64,9 +64,9 @@ def test_observation_extra_fields_forbidden():
         )
 
 
-def test_counts_persons_non_negative():
+def test_counts_present_non_negative():
     with pytest.raises(ValidationError):
-        ObservationCounts(persons=-1)
+        ObservationCounts(present=-1)
 
 
 def test_banned_metadata_keys_is_nonempty():

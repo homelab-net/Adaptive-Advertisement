@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://homelab-net.github.io/Adaptive-Advertisement/contracts/dashboard-api/audit-event.schema.json",
+  "title": "AuditEvent",
+  "description": "Append-only audit event record (ICD-7). Written by dashboard-api for every state-changing operator action. Never updated or deleted. All admin actions must be auditable (PRIV-006).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "event_type",
+    "entity_type",
+    "entity_id",
+    "actor",
+    "created_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "manifest.created",
+        "manifest.approved",
+        "manifest.rejected",
+        "manifest.enabled",
+        "manifest.disabled",
+        "manifest.archived",
+        "campaign.created",
+        "campaign.updated",
+        "campaign.archived",
+        "campaign.manifest_added",
+        "campaign.manifest_removed",
+        "asset.uploaded",
+        "asset.archived",
+        "safe_mode.engaged",
+        "safe_mode.cleared"
+      ],
+      "description": "Dot-namespaced event type."
+    },
+    "entity_type": {
+      "type": "string",
+      "enum": ["manifest", "campaign", "asset", "system"],
+      "description": "Type of the primary entity affected."
+    },
+    "entity_id": {
+      "type": "string",
+      "description": "ID of the primary entity (manifest_id, campaign UUID, asset_id, or 'system')."
+    },
+    "actor": {
+      "type": "string",
+      "maxLength": 128,
+      "description": "Operator identifier. 'operator' for MVP (no auth); will be auth subject in future."
+    },
+    "payload": {
+      "type": ["object", "null"],
+      "description": "Event-specific context (e.g. rejection reason, previous state). Must never contain PII or image data."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

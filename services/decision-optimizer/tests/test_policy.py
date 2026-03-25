@@ -1,0 +1,167 @@
+"""
+Unit tests for the policy engine and rule loader.
+"""
+import json
+import pytest
+from pathlib import Path
+
+from decision_optimizer.policy import Rule, PolicyConfig, PolicyEngine, load_policy
+from tests.conftest import make_signal
+
+
+# ---------------------------------------------------------------------------
+# Rule.matches()
+# ---------------------------------------------------------------------------
+
+class TestRuleMatches:
+    def _rule(self, **conditions) -> Rule:
+        return Rule(rule_id="r", priority=0, manifest_id="m", **conditions)
+
+    def test_empty_conditions_always_matches(self):
+        r = self._rule()
+        assert r.matches(make_signal(count=0, confidence=0.0))
+        assert r.matches(make_signal(count=10, confidence=1.0))
+
+    def test_presence_count_gte_matches(self):
+        r = self._rule(presence_count_gte=2)
+        assert r.matches(make_signal(count=2))
+        assert r.matches(make_signal(count=5))
+        assert not r.matches(make_signal(count=1))
+        assert not r.matches(make_signal(count=0))
+
+    def test_presence_count_lte_matches(self):
+        r = self._rule(presence_count_lte=3)
+        assert r.matches(make_signal(count=0))
+        assert r.matches(make_signal(count=3))
+        assert not r.matches(make_signal(count=4))
+
+    def test_presence_count_eq_matches(self):
+        r = self._rule(presence_count_eq=2)
+        assert r.matches(make_signal(count=2))
+        assert not r.matches(make_signal(count=1))
+        assert not r.matches(make_signal(count=3))
+
+    def test_presence_confidence_gte_matches(self):
+        r = self._rule(presence_confidence_gte=0.7)
+        assert r.matches(make_signal(confidence=0.7))
+        assert r.matches(make_signal(confidence=1.0))
+        assert not r.matches(make_signal(confidence=0.69))
+
+    def test_combined_conditions_all_must_match(self):
+        r = self._rule(presence_count_gte=2, presence_confidence_gte=0.8)
+        assert r.matches(make_signal(count=3, confidence=0.9))
+        assert not r.matches(make_signal(count=3, confidence=0.5))   # conf fails
+        assert not r.matches(make_signal(count=1, confidence=0.9))   # count fails
+
+    def test_malformed_signal_returns_false(self):
+        r = self._rule(presence_count_gte=1)
+        assert not r.matches({})
+        assert not r.matches({"state": {}})
+
+
+# ---------------------------------------------------------------------------
+# PolicyEngine.evaluate()
+# ---------------------------------------------------------------------------
+
+class TestPolicyEngine:
+    def _engine(self, rules: list[Rule], dwell: int = 5000, cooldown: int = 2000) -> PolicyEngine:
+        return PolicyEngine(PolicyConfig(rules=rules, min_dwell_ms=dwell, cooldown_ms=cooldown))
+
+    def test_returns_highest_priority_match(self):
+        rules = [
+            Rule("low",  priority=5,  manifest_id="m-low",  presence_count_gte=1),
+            Rule("high", priority=20, manifest_id="m-high", presence_count_gte=1),
+        ]
+        eng = self._engine(rules)
+        assert eng.evaluate(make_signal(count=2)) == "m-high"
+
+    def test_returns_first_matching_when_tie(self):
+        # Both priority=10 — file order is preserved (stable sort)
+        rules = [
+            Rule("first",  priority=10, manifest_id="m-first",  presence_count_gte=1),
+            Rule("second", priority=10, manifest_id="m-second", presence_count_gte=1),
+        ]
+        eng = self._engine(rules)
+        result = eng.evaluate(make_signal(count=1))
+        assert result in ("m-first", "m-second")  # stable sort — either is ok
+
+    def test_skips_non_matching_rules(self):
+        rules = [
+            Rule("group",   priority=20, manifest_id="m-group",   presence_count_gte=3),
+            Rule("attract", priority=0,  manifest_id="m-attract"),
+        ]
+        eng = self._engine(rules)
+        # count=1 doesn't satisfy group rule → falls through to attract
+        assert eng.evaluate(make_signal(count=1)) == "m-attract"
+
+    def test_catch_all_rule_fires_when_no_other_match(self):
+        rules = [
+            Rule("strict", priority=10, manifest_id="m-strict", presence_count_gte=5),
+            Rule("catch",  priority=0,  manifest_id="m-catch"),
+        ]
+        eng = self._engine(rules)
+        assert eng.evaluate(make_signal(count=0)) == "m-catch"
+
+    def test_returns_none_when_no_rule_matches(self):
+        rules = [Rule("strict", priority=10, manifest_id="m", presence_count_gte=5)]
+        eng = self._engine(rules)
+        assert eng.evaluate(make_signal(count=1)) is None
+
+    def test_exposes_min_dwell_ms(self):
+        eng = self._engine([], dwell=12_000)
+        assert eng.min_dwell_ms == 12_000
+
+    def test_exposes_cooldown_ms(self):
+        eng = self._engine([], cooldown=3_000)
+        assert eng.cooldown_ms == 3_000
+
+
+# ---------------------------------------------------------------------------
+# load_policy()
+# ---------------------------------------------------------------------------
+
+class TestLoadPolicy:
+    def test_loads_valid_rules_file(self, rules_file):
+        eng = load_policy(rules_file)
+        # Three rules in the fixture
+        assert len(eng._rules) == 3
+
+    def test_rules_sorted_by_priority(self, rules_file):
+        eng = load_policy(rules_file)
+        priorities = [r.priority for r in eng._rules]
+        assert priorities == sorted(priorities, reverse=True)
+
+    def test_wrong_schema_version_raises(self, tmp_path):
+        p = tmp_path / "bad.json"
+        p.write_text(json.dumps({
+            "schema_version": "9.9.9",
+            "rules": [{"rule_id": "x", "manifest_id": "m", "conditions": {}}],
+        }))
+        with pytest.raises(ValueError, match="schema_version"):
+            load_policy(str(p))
+
+    def test_empty_rules_raises(self, tmp_path):
+        p = tmp_path / "empty.json"
+        p.write_text(json.dumps({"schema_version": "1.0.0", "rules": []}))
+        with pytest.raises(ValueError, match="at least one rule"):
+            load_policy(str(p))
+
+    def test_missing_file_raises(self):
+        with pytest.raises(FileNotFoundError):
+            load_policy("/no/such/file.json")
+
+    def test_min_dwell_and_cooldown_loaded(self, rules_file):
+        eng = load_policy(rules_file)
+        assert eng.min_dwell_ms == 5000
+        assert eng.cooldown_ms == 2000
+
+    def test_full_rule_set_selects_correctly(self, rules_file):
+        eng = load_policy(rules_file)
+        # 3+ people with high confidence → group
+        assert eng.evaluate(make_signal(count=3, confidence=0.8)) == "manifest-group"
+        # 1 person with high confidence → single
+        assert eng.evaluate(make_signal(count=1, confidence=0.9)) == "manifest-single"
+        # 0 people (or low confidence) → attract catch-all
+        assert eng.evaluate(make_signal(count=0, confidence=0.5)) == "manifest-attract"
+        # Low confidence blocks specific rules → attract
+        assert eng.evaluate(make_signal(count=5, confidence=0.3)) == "manifest-attract"

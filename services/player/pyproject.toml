@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "player"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.9,<4.0",
+    "jsonschema>=4.21,<5.0",
+    "websockets>=12.0,<14.0",
+]
+
+[project.scripts]
+player = "player.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["player*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.pytest.ini_options.markers]
+# no custom markers needed at scaffold time

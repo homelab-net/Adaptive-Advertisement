@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://homelab-net.github.io/Adaptive-Advertisement/contracts/dashboard-api/manifest-record.schema.json",
+  "title": "ManifestRecord",
+  "description": "Canonical manifest business object as stored in PostgreSQL and returned by the dashboard API (ICD-6/ICD-7). Represents an operator-uploaded creative manifest at any point in its approval lifecycle.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "manifest_id",
+    "title",
+    "status",
+    "schema_version",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Internal surrogate key (UUID v4)."
+    },
+    "manifest_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Business-level manifest identifier. Used by decision-optimizer and player to reference the manifest. Must be unique per tenant/site."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "description": "Human-readable name for the manifest shown in the dashboard."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "approved", "rejected", "enabled", "disabled", "archived"],
+      "description": "Approval lifecycle state. See state machine in README."
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "ICD-5 schema version of the manifest_json payload."
+    },
+    "manifest_json": {
+      "type": ["object", "null"],
+      "description": "The raw ICD-5 creative manifest object as supplied by the operator. Null when returned in list views for bandwidth efficiency."
+    },
+    "rejection_reason": {
+      "type": ["string", "null"],
+      "maxLength": 1024,
+      "description": "Free-text reason supplied by the operator when rejecting a manifest."
+    },
+    "approved_by": {
+      "type": ["string", "null"],
+      "maxLength": 128,
+      "description": "Identifier of the actor who approved the manifest (operator label, future auth subject)."
+    },
+    "approved_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp of most recent approval."
+    },
+    "enabled_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp when manifest was most recently enabled for playback."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp of record creation."
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp of last modification."
+    }
+  }
+}

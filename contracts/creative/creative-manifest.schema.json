@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://homelab-net.github.io/Adaptive-Advertisement/contracts/creative/creative-manifest.schema.json",
+  "title": "CreativeManifest",
+  "description": "Approved creative manifest produced by the creative service and consumed by the player. ICD-5 contract. Player must render only manifests that have been approved. Unapproved or missing manifests must be rejectable without blanking playback.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "approved_at",
+    "approved_by",
+    "items"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "manifest_id": {
+      "description": "Stable unique identifier for this manifest version. Referenced by player-command activate_creative payloads.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "approved_at": {
+      "description": "UTC RFC 3339 timestamp when this manifest was approved.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "approved_by": {
+      "description": "Identifier of the operator who approved this manifest.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "expires_at": {
+      "description": "Optional UTC RFC 3339 timestamp after which this manifest must not be rendered. If absent, the manifest does not expire.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "items": {
+      "description": "Ordered list of creative items in this manifest. Must contain at least one item.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "item_id",
+          "asset_id",
+          "asset_type",
+          "duration_ms"
+        ],
+        "properties": {
+          "item_id": {
+            "description": "Stable identifier for this item within the manifest.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "asset_id": {
+            "description": "Identifier of the approved asset to render. Must resolve to an asset the player has cached or can fetch.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "asset_type": {
+            "description": "Media type of the asset.",
+            "type": "string",
+            "enum": ["video", "image", "html"]
+          },
+          "duration_ms": {
+            "description": "Target display duration for this item, in milliseconds. For video assets, this is advisory; the asset's natural duration takes precedence.",
+            "type": "integer",
+            "minimum": 1000
+          },
+          "loop": {
+            "description": "If true and asset_type is video, the asset should loop for the full duration_ms. Default false.",
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "policy": {
+      "description": "Optional rendering policy modifiers. Constrains how the player may apply this manifest.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_dwell_ms": {
+          "description": "Minimum time the player must display this manifest before a switch command may be accepted.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "cooldown_ms": {
+          "description": "Minimum time after this manifest completes before it may be reactivated.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "allow_interruption": {
+          "description": "If false, the player must complete the full manifest play-through before accepting the next activate_creative command. Default true.",
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

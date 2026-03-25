@@ -160,8 +160,8 @@ class DeepStreamDriver(PipelineDriver):
                     "confidence_mean": (
                         confidence_sum / obj_count if obj_count > 0 else 0.0
                     ),
-                    "pipeline_fps": self._fps,
-                    "inference_ms": None,
+                    "frames_processed": 1,
+                    "frames_dropped": 0,
                 }
             ]
             return Gst.FlowReturn.OK
