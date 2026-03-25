@@ -330,11 +330,8 @@ class TestRuntimeLogPIILint:
         sys.path.insert(0, str(_SERVICES_ROOT / "dashboard-api"))
 
         # We can test _parse_snapshot directly without DB
-        import importlib
-        spec = importlib.util.spec_from_file_location(
-            "audience_sink",
-            _SERVICES_ROOT / "dashboard-api" / "dashboard_api" / "audience_sink.py",
-        )
+        import importlib.util
+        import unittest.mock
 
         root = logging.getLogger()
         handler = _install_capture(root)
@@ -357,14 +354,13 @@ class TestRuntimeLogPIILint:
             }).encode()
 
             # Import and call _parse_snapshot
-            import importlib.util
             spec2 = importlib.util.spec_from_file_location(
-                "audience_sink_mod",
+                "dashboard_api.audience_sink",
                 _SERVICES_ROOT / "dashboard-api" / "dashboard_api" / "audience_sink.py",
             )
             mod = importlib.util.module_from_spec(spec2)
+            mod.__package__ = "dashboard_api"
             # Patch out imports that require DB
-            import unittest.mock
             with unittest.mock.patch.dict("sys.modules", {
                 "dashboard_api.config": unittest.mock.MagicMock(
                     settings=unittest.mock.MagicMock(
