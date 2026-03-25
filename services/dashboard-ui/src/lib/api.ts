@@ -11,6 +11,11 @@ import type {
   SystemStatus, SafeModeInfo,
   AnalyticsSummary,
   AuditEventListResponse,
+  ManifestStatsListResponse,
+  ManifestDetailResponse,
+  CompareResponse,
+  ImpressionListResponse,
+  LiveStatus,
 } from '@/types/api'
 
 const BASE = '/api/v1'
@@ -107,6 +112,60 @@ export const api = {
   // --- Analytics ---
   analytics: {
     summary: () => request<AnalyticsSummary>('/analytics/summary'),
+
+    // Per-manifest impression stats leaderboard
+    manifestList: (params?: { window?: string }) => {
+      const q = new URLSearchParams()
+      if (params?.window) q.set('window', params.window)
+      return request<ManifestStatsListResponse>(`/analytics/manifests${q.size ? `?${q}` : ''}`)
+    },
+
+    // Full manifest detail: trend + audience + impression log
+    manifestDetail: (manifestId: string, params?: { window?: string }) => {
+      const q = new URLSearchParams()
+      if (params?.window) q.set('window', params.window)
+      return request<ManifestDetailResponse>(
+        `/analytics/manifests/${manifestId}${q.size ? `?${q}` : ''}`
+      )
+    },
+
+    // A/B comparison of two manifests
+    compare: (a: string, b: string, params?: { window?: string }) => {
+      const q = new URLSearchParams({ a, b })
+      if (params?.window) q.set('window', params.window)
+      return request<CompareResponse>(`/analytics/compare?${q}`)
+    },
+
+    // Paginated raw impression log
+    impressions: (params?: {
+      manifest_id?: string
+      window?: string
+      page?: number
+      page_size?: number
+    }) => {
+      const q = new URLSearchParams()
+      if (params?.manifest_id) q.set('manifest_id', params.manifest_id)
+      if (params?.window)      q.set('window', params.window)
+      if (params?.page)        q.set('page', String(params.page))
+      if (params?.page_size)   q.set('page_size', String(params.page_size))
+      return request<ImpressionListResponse>(`/analytics/impressions${q.size ? `?${q}` : ''}`)
+    },
+  },
+
+  // --- Live (GET /api/v1/live) ---
+  // PLACEHOLDER: endpoint not yet built in dashboard-api.
+  // Returns a mock-shaped null response until the endpoint exists.
+  // Wire up once ImpressionRecorder MQTT caching is in place.
+  live: {
+    status: async (): Promise<LiveStatus> => {
+      try {
+        return await request<LiveStatus>('/live')
+      } catch {
+        // PLACEHOLDER: /api/v1/live does not exist yet.
+        // Return null-safe shape so OverviewPage renders its offline state.
+        return { cv: null, player: null }
+      }
+    },
   },
 
   // --- Events ---

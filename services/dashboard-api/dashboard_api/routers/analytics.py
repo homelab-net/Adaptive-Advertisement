@@ -6,11 +6,18 @@ GET  /api/v1/analytics/play-events          — paginated impression log
 GET  /api/v1/analytics/campaigns/{id}/summary — per-campaign impression counts
 GET  /api/v1/analytics/uptime               — player uptime SLO summary
 
-Privacy rules enforced here:
-- No individual-level data is returned.
+ImpressionRecorder becomes live when:
+  1. DASHBOARD_MQTT_ENABLED=true in dashboard-api environment
+  2. Mosquitto broker is reachable
+  3. Player is publishing ICD-9 events (PLAYER_MQTT_ENABLED=true)
+  4. input-cv + audience-state are running on Jetson hardware (for ICD-3 snapshots)
+
+Privacy rules enforced here
+---------------------------
+- No individual-level data returned.
 - No tracking IDs, session IDs, or persistent identifiers.
-- Only aggregate counts and coarse demographic bins.
-- Consistent with the locked invariants: no identity recognition, no
+- Only aggregate counts, rates, and coarse demographic bins.
+- Consistent with locked invariants: no identity recognition, no
   cross-visit tracking, metadata-only posture.
 """
 import logging

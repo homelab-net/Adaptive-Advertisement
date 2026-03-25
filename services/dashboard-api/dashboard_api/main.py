@@ -49,7 +49,7 @@ log = logging.getLogger(__name__)
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # --- startup ---
     log.info("dashboard-api starting — db=%s", settings.database_url[:40])
-    from .db import engine
+    from .db import engine, AsyncSessionLocal
     from sqlalchemy import text
     try:
         async with engine.connect() as conn:

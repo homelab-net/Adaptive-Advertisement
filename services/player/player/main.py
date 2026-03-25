@@ -34,6 +34,7 @@ from .play_event_publisher import PlayEventPublisher
 from .renderer import create_renderer, RendererBase, RendererError, RendererStartupError
 from .state import StateMachine, TransitionResult, PlayerState
 from .health import make_health_app
+from .event_publisher import PlayerEventPublisher
 
 setup_logging("player", config.LOG_LEVEL)
 log = logging.getLogger(__name__)
@@ -160,8 +161,66 @@ async def run() -> None:
     is_ready[0] = True
 
     # Step 7: command loop
+
+    # ICD-9 event publisher — publishes state transitions to MQTT so that
+    # dashboard-api ImpressionRecorder can build impression_events rows.
+    # PLACEHOLDER: set PLAYER_MQTT_ENABLED=true and ensure Mosquitto is
+    # reachable before the first pilot. Until then event_publisher is a
+    # no-op (no client is set) and no MQTT traffic is produced.
+    event_publisher = PlayerEventPublisher()
+    _prev_manifest_id: list[Optional[str]] = [None]  # track for deactivation events
+
+    if config.MQTT_ENABLED:
+        # PLACEHOLDER: wire aiomqtt.Client here for ICD-9 event publishing.
+        # Pattern to follow: audience-state signal_publisher.py which uses
+        # the same broker. Add to player's startup once aiomqtt is in
+        # services/player/requirements.txt.
+        #
+        # Example (to add when ready):
+        #   import aiomqtt
+        #   mqtt_client = aiomqtt.Client(
+        #       hostname=config.MQTT_BROKER_HOST,
+        #       port=config.MQTT_BROKER_PORT,
+        #   )
+        #   await mqtt_client.__aenter__()
+        #   event_publisher.set_client(mqtt_client)
+        log.warning(
+            "PLAYER_MQTT_ENABLED=true but aiomqtt client wiring is a PLACEHOLDER. "
+            "ICD-9 events will not be published until aiomqtt is added to "
+            "requirements.txt and the client is initialised here."
+        )
+    else:
+        log.info(
+            "ICD-9 event publisher disabled (PLAYER_MQTT_ENABLED=false). "
+            "Set to true when Mosquitto broker and ImpressionRecorder are ready."
+        )
+
     async def on_transition(result: TransitionResult) -> None:
         await _execute_transition(result, renderer, fallback, manifest_store)
+        # Publish ICD-9 state-transition event for impression tracking
+        prev = _prev_manifest_id[0]
+        new_state = result.new_state
+        if result.action == "play_manifest" and result.manifest_id:
+            if prev is not None and prev != result.manifest_id:
+                # Previous manifest is being deactivated
+                await event_publisher.manifest_deactivated(
+                    manifest_id=prev,
+                    dwell_elapsed=None,  # dwell state unknown at switch point
+                )
+            await event_publisher.manifest_activated(
+                manifest_id=result.manifest_id,
+                rule_rationale=result.reason,
+            )
+            _prev_manifest_id[0] = result.manifest_id
+        elif result.action == "show_fallback":
+            if prev is not None:
+                if new_state.value == "safe_mode":
+                    await event_publisher.safe_mode_entered()
+                else:
+                    await event_publisher.fallback_entered()
+                _prev_manifest_id[0] = None
+        elif result.action == "hold" and new_state.value == "frozen":
+            await event_publisher.frozen()
 
     on_transition_holder[0] = on_transition  # expose to supervisor control endpoint (ICD-8)
 
