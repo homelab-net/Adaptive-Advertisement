@@ -263,6 +263,44 @@ class UptimeSummaryOut(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Live status (GET /api/v1/live)
+# ---------------------------------------------------------------------------
+
+class DemographicsLiveOut(BaseModel):
+    """Coarse age-bin distribution from the latest CV signal."""
+    age_group: Optional[dict[str, float]] = None
+    suppressed: bool
+
+
+class CvLiveOut(BaseModel):
+    """Real-time CV pipeline state derived from the latest audience_snapshot row."""
+    available: bool
+    count: Optional[int] = None
+    confidence: Optional[float] = None
+    fps: Optional[float] = None          # Not persisted in DB; populated by future telemetry
+    inference_ms: Optional[float] = None  # Not persisted in DB; populated by future telemetry
+    signal_age_ms: Optional[int] = None
+    state_stable: Optional[bool] = None
+    freeze_decision: Optional[bool] = None
+    demographics: Optional[DemographicsLiveOut] = None
+
+
+class PlayerLiveOut(BaseModel):
+    """Real-time player state inferred from safe_mode_state, play_events, and health probe."""
+    available: bool
+    state: Optional[str] = None  # "fallback" | "active" | "safe_mode"
+    active_manifest_id: Optional[str] = None
+    dwell_elapsed: Optional[bool] = None    # Not persisted in DB; from ICD-9 events
+    freeze_reason: Optional[str] = None     # Not persisted in DB; from ICD-9 events
+    safe_mode_reason: Optional[str] = None
+
+
+class LiveStatusOut(BaseModel):
+    cv: Optional[CvLiveOut] = None
+    player: Optional[PlayerLiveOut] = None
+
+
+# ---------------------------------------------------------------------------
 # Audit events
 # ---------------------------------------------------------------------------
 

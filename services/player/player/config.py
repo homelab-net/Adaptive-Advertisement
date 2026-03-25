@@ -72,21 +72,16 @@ PLAYER_CONTRACT_DIR: str = os.environ.get(
     str(Path(__file__).parent.parent.parent.parent / "contracts"),
 )
 
-# --- MQTT (play-event publisher) -----------------------------------------
-MQTT_BROKER_HOST: str = os.environ.get("MQTT_BROKER_HOST", "localhost")
-MQTT_BROKER_PORT: int = int(os.environ.get("MQTT_BROKER_PORT", "1883"))
+# --- MQTT (ICD-9 event publisher + play-event publisher) -----------------
+# Set PLAYER_MQTT_ENABLED=true once the Mosquitto broker is reachable and
+# ImpressionRecorder is running in dashboard-api.  Impression analytics will
+# not populate until this is enabled.
+MQTT_ENABLED: bool = os.environ.get("PLAYER_MQTT_ENABLED", "false").lower() == "true"
+MQTT_BROKER_HOST: str = os.environ.get("PLAYER_MQTT_BROKER_HOST", "mosquitto")
+MQTT_BROKER_PORT: int = int(os.environ.get("PLAYER_MQTT_BROKER_PORT", "1883"))
 MQTT_PLAY_EVENTS_TOPIC: str = os.environ.get(
     "MQTT_PLAY_EVENTS_TOPIC", "adaptive/play-events/v1"
 )
 
 # Log level (OBS-001)
 LOG_LEVEL: str = os.environ.get("LOG_LEVEL", "INFO")
-
-# --- ICD-9 MQTT event publisher -----------------------------------------------
-# PLACEHOLDER: set PLAYER_MQTT_ENABLED=true once the Mosquitto broker is
-# reachable and ImpressionRecorder is running in dashboard-api. Until then
-# the PlayerEventPublisher.publish() calls are silent no-ops (no MQTT client
-# is initialised). Impression analytics will not populate until this is true.
-MQTT_ENABLED: bool = os.environ.get("PLAYER_MQTT_ENABLED", "false").lower() == "true"
-MQTT_BROKER_HOST: str = os.environ.get("PLAYER_MQTT_BROKER_HOST", "mosquitto")
-MQTT_BROKER_PORT: int = int(os.environ.get("PLAYER_MQTT_BROKER_PORT", "1883"))

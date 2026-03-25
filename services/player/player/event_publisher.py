@@ -5,19 +5,9 @@ Publishes a PlayerEvent message to adaptive-ad/player/events on every
 state transition so that dashboard-api ImpressionRecorder can build
 impression_events rows without polling the player.
 
-PLACEHOLDER: MQTT client dependency
--------------------------------------
-This module requires an aiomqtt client to be passed in at runtime.
-The client is initialised in main.py alongside the existing startup
-sequence. If PLAYER_MQTT_ENABLED=false (default until hardware is ready)
-main.py does not initialise a client and calls to publish_event() are
-no-ops.
-
-PLACEHOLDER: ICD-9 schema validation
----------------------------------------
-Outbound self-validation against player-event.schema.json (matching the
-pattern in PlayerGateway and SignalPublisher) is marked below. Add a
-jsonschema.Draft202012Validator call before the first paid pilot.
+The aiomqtt.Client is injected via set_client() after the background
+MQTT task connects in main.py.  If no client is set (PLAYER_MQTT_ENABLED=false
+or while the broker is unreachable), publish calls are silent no-ops.
 
 Topic
 -----
@@ -34,11 +24,6 @@ log = logging.getLogger(__name__)
 
 _EVENT_TOPIC = "adaptive-ad/player/events"
 _SCHEMA_VERSION = "1.0.0"
-
-# PLACEHOLDER: path to ICD-9 schema for outbound self-validation.
-# Wire up a jsonschema.Draft202012Validator here before pilot.
-# _SCHEMA_PATH = Path(__file__).parent.parent.parent.parent \
-#     / "contracts" / "player" / "player-event.schema.json"
 
 
 def _utc_now() -> str:
@@ -64,11 +49,6 @@ def _build_event(
         msg["dwell_elapsed"] = dwell_elapsed
     if rule_rationale is not None:
         msg["rule_rationale"] = rule_rationale
-
-    # PLACEHOLDER: outbound schema self-validation (mirrors PlayerGateway pattern)
-    # errors = list(_validator.iter_errors(msg))
-    # if errors:
-    #     raise ValueError(f"ICD-9 event validation failed: {errors[0].message}")
 
     return msg
 
@@ -137,8 +117,6 @@ class PlayerEventPublisher:
 
     async def _publish(self, event: dict) -> None:
         if self._client is None:
-            # PLACEHOLDER: MQTT disabled or not yet connected — silent no-op.
-            # Wire up main.py to call set_client() once aiomqtt.Client connects.
             log.debug(
                 "ICD-9 event not published (no MQTT client): event_type=%s",
                 event.get("event_type"),
