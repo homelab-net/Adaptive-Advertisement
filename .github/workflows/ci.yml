@@ -216,6 +216,9 @@ jobs:
           docker compose version
           docker buildx ls
 
+      - name: Select docker-driver builder (avoids moby/buildkit pull)
+        run: docker buildx use default
+
       - name: Build service images (excluding input-cv and image-only services)
         env:
           RENDERER_BACKEND: stub
@@ -318,6 +321,9 @@ jobs:
           docker info | head -20
           docker compose version
           docker buildx ls
+
+      - name: Select docker-driver builder (avoids moby/buildkit pull)
+        run: docker buildx use default
 
       - name: Build service images (excluding input-cv and image-only services)
         env:
