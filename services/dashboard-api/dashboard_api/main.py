@@ -37,16 +37,24 @@ from .routers.campaigns import router as campaigns_router
 from .routers.system import router as system_router
 from .routers.analytics import router as analytics_router
 from .routers.fallback import router as fallback_router
+from .impression_recorder import ImpressionRecorder
 
 setup_logging("dashboard-api", settings.log_level)
 log = logging.getLogger(__name__)
 
+# Module-level recorder instance — started in lifespan, stopped on shutdown.
+# PLACEHOLDER: ImpressionRecorder is a no-op until DASHBOARD_MQTT_ENABLED=true.
+# See impression_recorder.py for full activation requirements.
+_impression_recorder: ImpressionRecorder | None = None
+
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    global _impression_recorder
+
     # --- startup ---
     log.info("dashboard-api starting — db=%s", settings.database_url[:40])
-    from .db import engine
+    from .db import engine, AsyncSessionLocal
     from sqlalchemy import text
     try:
         async with engine.connect() as conn:
@@ -57,9 +65,18 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "database not reachable at startup: %s — service will retry via readyz", exc
         )
 
+    # Start ImpressionRecorder (MQTT subscriber for ICD-3 + ICD-9).
+    # PLACEHOLDER: no-op when DASHBOARD_MQTT_ENABLED=false (default).
+    # Set DASHBOARD_MQTT_ENABLED=true once Mosquitto, player ICD-9 events,
+    # and input-cv + audience-state are all running on hardware.
+    _impression_recorder = ImpressionRecorder(AsyncSessionLocal)
+    await _impression_recorder.start()
+
     yield  # application is running
 
     # --- shutdown ---
+    if _impression_recorder is not None:
+        await _impression_recorder.stop()
     await engine.dispose()
     log.info("dashboard-api stopped")
 

@@ -131,3 +131,118 @@ export interface AuditEventListResponse {
   items: AuditEvent[]
   pagination: Pagination
 }
+
+// --- Analytics: per-manifest impression metrics ---
+// All fields are null / data_available=false until ImpressionRecorder is live
+// (requires DASHBOARD_MQTT_ENABLED=true + ICD-9 player events on hardware).
+
+export interface ManifestStats {
+  manifest_id: string
+  title: string | null
+  status: string | null
+  total_impressions: number
+  avg_audience_count: number | null
+  avg_duration_ms: number | null
+  /** Fraction 0.0–1.0 — null until impressions are recorded */
+  dwell_completion_rate: number | null
+  total_reach: number
+  last_impression_at: string | null
+  /** "up" | "down" | "flat" | "insufficient_data" */
+  trend_direction: string
+  data_available: boolean
+}
+
+export interface ManifestStatsListResponse {
+  items: ManifestStats[]
+  data_available: boolean
+}
+
+export interface HourlyBucket {
+  hour: string
+  impressions: number
+  reach: number
+  dwell_rate: number | null
+}
+
+export interface AudienceComposition {
+  child: number | null
+  young_adult: number | null
+  adult: number | null
+  senior: number | null
+  suppressed_pct: number
+}
+
+export interface RecentImpression {
+  id: string
+  started_at: string
+  ended_at: string | null
+  duration_ms: number | null
+  audience_count: number | null
+  audience_confidence: number | null
+  dwell_elapsed: boolean | null
+  ended_reason: string | null
+}
+
+export interface ManifestDetailResponse {
+  manifest_id: string
+  title: string | null
+  status: string | null
+  stats: ManifestStats
+  hourly_series: HourlyBucket[]
+  audience_composition: AudienceComposition | null
+  recent_impressions: RecentImpression[]
+  data_available: boolean
+}
+
+export interface ComparisonMetrics {
+  dwell_rate_delta: number | null
+  reach_delta: number | null
+  impression_delta: number | null
+  avg_audience_delta: number | null
+  dominant_segment_a: string | null
+  dominant_segment_b: string | null
+  segments_overlap: string[]
+  /** "high" | "moderate" | "low" */
+  confidence: string
+}
+
+export interface CompareResponse {
+  manifest_a: ManifestStats
+  manifest_b: ManifestStats
+  comparison: ComparisonMetrics
+  data_available: boolean
+}
+
+export interface ImpressionListResponse {
+  items: RecentImpression[]
+  pagination: Pagination
+}
+
+// --- Live view (GET /api/v1/live) ---
+// PLACEHOLDER: this endpoint is not yet built in dashboard-api.
+// It will be added in a follow-up once MQTT live state caching is wired.
+// Until then LiveStatus is used by OverviewPage with null values.
+export interface LiveStatus {
+  cv: {
+    available: boolean
+    count: number | null
+    confidence: number | null
+    fps: number | null
+    inference_ms: number | null
+    signal_age_ms: number | null
+    state_stable: boolean | null
+    freeze_decision: boolean | null
+    demographics: {
+      age_group: Record<string, number> | null
+      suppressed: boolean
+    } | null
+  } | null
+  player: {
+    available: boolean
+    state: 'fallback' | 'active' | 'frozen' | 'safe_mode' | null
+    active_manifest_id: string | null
+    dwell_elapsed: boolean | null
+    freeze_reason: string | null
+    safe_mode_reason: string | null
+  } | null
+}

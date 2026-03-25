@@ -39,6 +39,19 @@ class Settings(BaseSettings):
     # Drop PNGs / MP4s here; write _selected to pin one without a restart.
     fallback_library_dir: str = "/data/fallback-library"
 
+    # --- MQTT (ImpressionRecorder — ICD-3 + ICD-9) -----------------------
+    # PLACEHOLDER: set DASHBOARD_MQTT_ENABLED=true once input-cv, audience-state,
+    # and player ICD-9 event publisher are running on Jetson hardware.
+    # Until then the ImpressionRecorder start() method is a no-op and all
+    # analytics endpoints return data_available=False.
+    mqtt_enabled: bool = False
+    mqtt_broker_host: str = "mosquitto"
+    mqtt_broker_port: int = 1883
+    # Derived URL for logging
+    @property
+    def mqtt_broker_url(self) -> str:
+        return f"mqtt://{self.mqtt_broker_host}:{self.mqtt_broker_port}"
+
     # --- Observability ---------------------------------------------------
     log_level: str = "INFO"
 
