@@ -309,7 +309,10 @@ async def get_live_status(
 
     # --- Build CV status ---
     if snapshot is not None:
-        age_ms = int((now - snapshot.sampled_at).total_seconds() * 1000)
+        sampled_at = snapshot.sampled_at
+        if sampled_at.tzinfo is None:
+            sampled_at = sampled_at.replace(tzinfo=timezone.utc)
+        age_ms = int((now - sampled_at).total_seconds() * 1000)
         cv_available = age_ms < _CV_STALE_THRESHOLD_MS
 
         age_groups: Optional[dict[str, float]] = None

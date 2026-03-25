@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir \
     "pydantic>=2.6" \
     "pydantic-settings>=2.2" \
     "aiohttp>=3.9" \
+    "aiomqtt>=2.0" \
     "python-multipart>=0.0.9"
 
 COPY services/dashboard-api/dashboard_api/ ./dashboard_api/
