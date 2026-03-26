@@ -231,7 +231,7 @@ jobs:
       - name: Pre-pull base images
         run: docker pull python:3.11-slim
 
-      # Pre-build service images using plain docker build --network=host.
+      # Pre-build service images using plain docker build.
       # docker compose up without --build will then find the images already in the
       # local daemon.  Compose names images as {project}-{service}.
       # --network=host on the build command puts each RUN-instruction container
@@ -239,19 +239,19 @@ jobs:
       - name: Build service images for compose stack
         run: |
           echo "=== audience-state ===" && \
-          docker build --network=host -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
+          docker build -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
           echo "=== creative ===" && \
-          docker build --network=host -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
+          docker build -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
           echo "=== decision-optimizer ===" && \
-          docker build --network=host -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
+          docker build -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
           echo "=== player ===" && \
-          docker build --network=host -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
+          docker build -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
           echo "=== supervisor ===" && \
-          docker build --network=host -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
+          docker build -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
           echo "=== dashboard-api ===" && \
-          docker build --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
+          docker build -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
           echo "=== dashboard-db-migrate ===" && \
-          docker build --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-db-migrate . && \
+          docker build -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-db-migrate . && \
           echo "=== all images built ==="
 
       - name: Start compose stack (excluding input-cv and dashboard-ui)
@@ -354,7 +354,7 @@ jobs:
           docker pull node:20-slim
           docker pull nginx:1.27-alpine
 
-      # Build all service images using plain docker build --network=host.
+      # Build all service images using plain docker build.
       # Excludes input-cv: its base image (nvcr.io/nvidia/deepstream-l4t) is
       # not available for x86_64; validated on target Jetson hardware.
       # Excludes mosquitto and postgres: image-only services with no build directive.
@@ -364,17 +364,17 @@ jobs:
       - name: Build service images (excluding input-cv)
         run: |
           echo "=== audience-state ===" && \
-          docker build --network=host -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
+          docker build -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
           echo "=== creative ===" && \
-          docker build --network=host -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
+          docker build -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
           echo "=== decision-optimizer ===" && \
-          docker build --network=host -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
+          docker build -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
           echo "=== player ===" && \
-          docker build --network=host -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
+          docker build -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
           echo "=== supervisor ===" && \
-          docker build --network=host -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
+          docker build -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
           echo "=== dashboard-api ===" && \
-          docker build --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
+          docker build -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
           echo "=== dashboard-ui ===" && \
-          docker build --network=host -f services/dashboard-ui/Dockerfile       -t adaptive-advertisement-dashboard-ui       services/dashboard-ui && \
+          docker build -f services/dashboard-ui/Dockerfile       -t adaptive-advertisement-dashboard-ui       services/dashboard-ui && \
           echo "=== all images built ==="

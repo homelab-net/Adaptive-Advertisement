@@ -23,12 +23,12 @@ COPY contracts/ /app/contracts/
 
 # Install shared utilities (structured JSON logging — OBS-001)
 COPY services/shared/ /tmp/shared_pkg/
-RUN --network=host pip install --no-cache-dir /tmp/shared_pkg && rm -rf /tmp/shared_pkg
+RUN pip install --no-cache-dir /tmp/shared_pkg && rm -rf /tmp/shared_pkg
 
 # Install Python dependencies before copying service source
 # (layer caching: dependencies change less often than source)
 COPY services/player/requirements.txt ./requirements.txt
-RUN --network=host pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy service source
 COPY services/player/player/ ./player/

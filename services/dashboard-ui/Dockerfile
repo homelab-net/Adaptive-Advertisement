@@ -4,10 +4,10 @@ FROM node:20-slim AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN --network=host npm ci --prefer-offline
+RUN npm ci --prefer-offline
 
 COPY . .
-RUN --network=host npm run build          # outputs to /app/dist
+RUN npm run build          # outputs to /app/dist
 
 
 # ── runtime stage ──────────────────────────────────────────────────────────

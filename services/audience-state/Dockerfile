@@ -12,10 +12,10 @@ COPY contracts/ /app/contracts/
 
 # Install shared utilities (structured JSON logging — OBS-001)
 COPY services/shared/ /tmp/shared_pkg/
-RUN --network=host pip install --no-cache-dir /tmp/shared_pkg && rm -rf /tmp/shared_pkg
+RUN pip install --no-cache-dir /tmp/shared_pkg && rm -rf /tmp/shared_pkg
 
 COPY services/audience-state/requirements.txt ./requirements.txt
-RUN --network=host pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY services/audience-state/audience_state/ ./audience_state/
 

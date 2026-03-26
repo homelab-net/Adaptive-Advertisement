@@ -4,12 +4,12 @@ WORKDIR /app
 
 # Install shared utilities (structured JSON logging — OBS-001)
 COPY services/shared/ /tmp/shared_pkg/
-RUN --network=host pip install --no-cache-dir /tmp/shared_pkg && rm -rf /tmp/shared_pkg
+RUN pip install --no-cache-dir /tmp/shared_pkg && rm -rf /tmp/shared_pkg
 
 # Install dependencies first (layer cache)
 # pyproject.toml copied for reference (alembic env.py uses it for package lookup)
 COPY services/dashboard-api/pyproject.toml ./
-RUN --network=host pip install --no-cache-dir \
+RUN pip install --no-cache-dir \
     "fastapi>=0.111" \
     "uvicorn[standard]>=0.29" \
     "sqlalchemy[asyncio]>=2.0" \

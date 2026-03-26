@@ -10,17 +10,17 @@
 FROM python:3.11-slim
 
 # docker CLI is needed for container restart commands.
-RUN --network=host apt-get update && apt-get install -y --no-install-recommends docker.io \
+RUN apt-get update && apt-get install -y --no-install-recommends docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Install shared utilities (structured JSON logging — OBS-001)
 COPY services/shared/ /tmp/shared_pkg/
-RUN --network=host pip install --no-cache-dir /tmp/shared_pkg && rm -rf /tmp/shared_pkg
+RUN pip install --no-cache-dir /tmp/shared_pkg && rm -rf /tmp/shared_pkg
 
 COPY services/supervisor/pyproject.toml ./pyproject.toml
-RUN --network=host pip install --no-cache-dir "aiohttp>=3.9,<4.0"
+RUN pip install --no-cache-dir "aiohttp>=3.9,<4.0"
 
 COPY services/supervisor/supervisor/ ./supervisor/
 
