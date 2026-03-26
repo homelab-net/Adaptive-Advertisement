@@ -9,7 +9,9 @@ Covers:
 - Archiving campaigns
 """
 import pytest
-from httpx import AsyncClient
+from typing import Any
+
+AsyncClient = Any
 
 
 async def _create_campaign(client: AsyncClient, name: str = "Test Campaign") -> dict:

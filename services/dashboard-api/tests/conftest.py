@@ -11,7 +11,6 @@ importing anything from dashboard_api so the engine is configured correctly.
 import os
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.pool import StaticPool
 
@@ -19,13 +18,15 @@ from sqlalchemy.pool import StaticPool
 _TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 os.environ["DASHBOARD_DATABASE_URL"] = _TEST_DB_URL
 
-from dashboard_api.main import create_app  # noqa: E402
-from dashboard_api.models import Base  # noqa: E402
-from dashboard_api.db import get_session  # noqa: E402
-
 
 @pytest_asyncio.fixture
 async def engine():
+    pytest.importorskip(
+        "aiosqlite",
+        reason="dashboard-api tests require aiosqlite; install dashboard-api test extras",
+    )
+    from dashboard_api.models import Base
+
     eng = create_async_engine(
         _TEST_DB_URL,
         echo=False,
@@ -68,11 +69,18 @@ async def client(engine):
         async with factory() as sess:
             yield sess
 
+    from dashboard_api.db import get_session
+    from dashboard_api.main import create_app
+
     app = create_app()
     app.dependency_overrides[get_session] = override_get_session
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app),
+    httpx = pytest.importorskip(
+        "httpx",
+        reason="dashboard-api tests require httpx; install test extra dependencies to run this suite",
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
         base_url="http://test",
     ) as c:
         yield c
