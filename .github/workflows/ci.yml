@@ -224,13 +224,21 @@ jobs:
         env:
           BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
         run: |
-          docker build --provenance=false -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    .
-          docker build --provenance=false -f services/creative/Dockerfile           -t adaptive-advertisement-creative           .
-          docker build --provenance=false -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer .
-          docker build --provenance=false -f services/player/Dockerfile             -t adaptive-advertisement-player             .
-          docker build --provenance=false -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         .
-          docker build --provenance=false -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      .
-          docker build --provenance=false -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-db-migrate .
+          echo "=== audience-state ===" && \
+          docker build --provenance=false --network=host -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
+          echo "=== creative ===" && \
+          docker build --provenance=false --network=host -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
+          echo "=== decision-optimizer ===" && \
+          docker build --provenance=false --network=host -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
+          echo "=== player ===" && \
+          docker build --provenance=false --network=host -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
+          echo "=== supervisor ===" && \
+          docker build --provenance=false --network=host -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
+          echo "=== dashboard-api ===" && \
+          docker build --provenance=false --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
+          echo "=== dashboard-db-migrate ===" && \
+          docker build --provenance=false --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-db-migrate . && \
+          echo "=== all images built ==="
 
       - name: Start compose stack (excluding input-cv and dashboard-ui)
         env:
@@ -329,17 +337,25 @@ jobs:
 
       # Use docker build directly — bypasses docker compose build's bake layer
       # which fails on Docker Compose v5 + docker driver without extra config.
-      # --provenance=false disables BuildKit OCI attestation metadata which
-      # is not supported by the docker driver and causes a build failure.
+      # --provenance=false: disables BuildKit OCI attestation (unsupported by docker driver)
+      # --network=host: avoids Docker bridge DNS issues that prevent pip/apt-get reaching internet
       # Build context is repo root (.) for all services except dashboard-ui.
       - name: Build service images (excluding input-cv)
         env:
           BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
         run: |
-          docker build --provenance=false -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    .
-          docker build --provenance=false -f services/creative/Dockerfile           -t adaptive-advertisement-creative           .
-          docker build --provenance=false -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer .
-          docker build --provenance=false -f services/player/Dockerfile             -t adaptive-advertisement-player             .
-          docker build --provenance=false -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         .
-          docker build --provenance=false -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      .
-          docker build --provenance=false -f services/dashboard-ui/Dockerfile       -t adaptive-advertisement-dashboard-ui       services/dashboard-ui
+          echo "=== audience-state ===" && \
+          docker build --provenance=false --network=host -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
+          echo "=== creative ===" && \
+          docker build --provenance=false --network=host -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
+          echo "=== decision-optimizer ===" && \
+          docker build --provenance=false --network=host -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
+          echo "=== player ===" && \
+          docker build --provenance=false --network=host -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
+          echo "=== supervisor ===" && \
+          docker build --provenance=false --network=host -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
+          echo "=== dashboard-api ===" && \
+          docker build --provenance=false --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
+          echo "=== dashboard-ui ===" && \
+          docker build --provenance=false --network=host -f services/dashboard-ui/Dockerfile       -t adaptive-advertisement-dashboard-ui       services/dashboard-ui && \
+          echo "=== all images built ==="
