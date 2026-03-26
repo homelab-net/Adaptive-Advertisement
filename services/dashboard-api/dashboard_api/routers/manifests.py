@@ -19,13 +19,15 @@ Rules
 - Archived is terminal — no further transitions.
 - All transitions are logged as audit events (PRIV-006).
 """
+import asyncio
 import json
 import logging
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -126,6 +128,18 @@ def _remove_manifest_from_disk(manifest_id: str) -> None:
             "failed to remove manifest from disk manifest_id=%s: %s",
             manifest_id, exc,
         )
+
+
+def _post_reload_sync(reload_url: str) -> tuple[int, str]:
+    req = urllib.request.Request(
+        reload_url,
+        data=b"",
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=5.0) as response:  # noqa: S310
+        body = response.read().decode("utf-8", errors="replace")
+        return response.status, body
 
 
 # ---------------------------------------------------------------------------
@@ -452,13 +466,11 @@ async def sync_rules(
     # Trigger hot-swap reload in decision-optimizer
     reload_url = f"{settings.decision_optimizer_admin_url}/api/v1/rules/reload"
     try:
-        async with httpx.AsyncClient(timeout=5.0) as http:
-            resp = await http.post(reload_url)
-            resp.raise_for_status()
-            optimizer_reloaded = True
-            optimizer_detail = resp.text
-            log.info("decision-optimizer rules reload triggered: %s", resp.status_code)
-    except httpx.HTTPError as exc:
+        status_code, response_text = await asyncio.to_thread(_post_reload_sync, reload_url)
+        optimizer_reloaded = True
+        optimizer_detail = response_text
+        log.info("decision-optimizer rules reload triggered: %s", status_code)
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
         optimizer_detail = str(exc)
         log.warning(
             "decision-optimizer reload request failed (rules file written): %s", exc

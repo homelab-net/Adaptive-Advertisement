@@ -8,7 +8,9 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 import pytest
-from httpx import AsyncClient
+from typing import Any
+
+AsyncClient = Any
 
 from dashboard_api.models import AudienceSnapshot, PlayEvent, UptimeEvent, Campaign, CampaignManifest, Manifest
 
