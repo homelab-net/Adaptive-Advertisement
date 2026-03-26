@@ -30,7 +30,7 @@ Commit density summary extracted from `git log --all`:
 
 Interpretation: development pace accelerated rapidly, then shifted into a fix/merge stabilization cycle. This is a classic signature of an unstable integration window rather than a fully healthy steady-state baseline.
 
-## Validation checks run
+## Validation checks run (updated after fix verification)
 
 ### 1) Contract test layer
 
@@ -52,17 +52,41 @@ Command:
 
 - `PYTHONPATH=services/shared:services/audience-state:services/decision-optimizer:services/input-cv:services/player:services/creative:services/supervisor pytest tests/integration -q`
 
-Result:
+Result before fix:
 
 - **FAIL** — 69 passed, 1 failed.
 - Failing test: `tests/integration/test_log_pii_lint.py::TestRuntimeLogPIILint::test_audience_sink_privacy_gate_logs_no_pii`
 - Error mode: `ImportError: attempted relative import with no known parent package` while loading `services/dashboard-api/dashboard_api/audience_sink.py`.
 
+Fix applied:
+
+- `services/dashboard-api/dashboard_api/audience_sink.py`
+  - switched relative imports to absolute `dashboard_api.*` imports
+  - removed flag-value details from privacy violation logs to satisfy PII runtime lint patterns
+
+Result after fix:
+
+- **PASS** — 70 passed, 0 failed (`pytest tests/integration -q` with service paths in `PYTHONPATH`).
+
 Implication:
 
-- There is at least one real integration fragility in the current stack around `dashboard-api` module import semantics used by runtime/privacy lint tests.
+- The previously deterministic integration failure is resolved in this environment.
 
-### 3) CI-like unit matrix reproduction
+### 3) Full repo test layer (contract + integration + hygiene-style root run)
+
+Command:
+
+- `PYTHONPATH=services/shared:services/audience-state:services/decision-optimizer:services/input-cv:services/player:services/creative:services/supervisor:services/dashboard-api pytest tests -q`
+
+Result:
+
+- **PASS** — 391 passed.
+
+Implication:
+
+- With explicit local import pathing, the downstream test surface under `tests/` is currently green.
+
+### 4) CI-like unit matrix reproduction
 
 Attempted commands (Python 3.11 + editable installs), aligned to `.github/workflows/ci.yml`:
 
@@ -75,7 +99,7 @@ Result:
 
 Implication:
 
-- Full CI parity could not be reproduced locally here; conclusions rely on the portions executed successfully.
+- Remaining downstream risk appears environment-driven (dependency/index access and interpreter provisioning), not the previously observed import/PII-lint bug.
 
 ## Point-of-departure (delta anchor)
 
@@ -87,14 +111,15 @@ Potential departure window for current instability:
 
 ## Health verdict
 
-**Current stack status: not fully healthy.**
+**Current stack status in this environment: functionally healthy at the repository test layer.**
 
 - Strength: contract layer is solid (310/310).
-- Risk: integration layer has at least one deterministic failure in privacy/runtime lint path.
-- Process signal: recent history shows sustained fix-after-merge churn, suggesting the branch is not yet in a low-risk stabilization phase.
+- Strength: integration + root tests are green after the `audience_sink` import/logging fix.
+- Remaining risk: CI parity is still not fully reproducible here due package index/proxy constraints and Python 3.11 setup friction.
+- Process signal: recent history still shows sustained fix-after-merge churn, so stabilization discipline remains important.
 
 ## Recommended next delta steps
 
-1. Fix import strategy in `dashboard_api/audience_sink.py` (or adjust the dynamic-loading test harness) so lint/integration tests pass under module-file loading semantics.
-2. Re-run full CI matrix in a clean Python 3.11 environment with unrestricted package access.
+1. Re-run full CI matrix in a clean Python 3.11 environment with unrestricted package access.
+2. Confirm compose-smoke and dashboard-api postgres migration jobs are green post-fix.
 3. Establish a new "green anchor" commit once contract + unit matrix + integration + compose smoke are all passing.
