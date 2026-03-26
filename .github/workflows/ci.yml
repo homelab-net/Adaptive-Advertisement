@@ -209,14 +209,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Properly initialise BuildKit for GitHub Actions.
-      # driver-opts: network=host puts the BuildKit container itself on the host
-      # network so that image pulls (FROM ...) and RUN package installs
-      # (pip, apt-get) can reach Docker Hub and PyPI without going through
-      # Docker's bridge, which has restricted egress on ubuntu-22.04 runners.
+      # Use the docker driver (inline BuildKit inside the daemon, no separate
+      # BuildKit container).  This avoids the docker-container driver's
+      # network isolation issue where RUN instructions run inside a sub-container
+      # and lose access to the host network even with --network=host.
       - uses: docker/setup-buildx-action@v3
         with:
-          driver-opts: network=host
+          driver: docker
 
       - name: Diagnose Docker environment
         run: |
@@ -332,14 +331,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Properly initialise BuildKit for GitHub Actions.
-      # driver-opts: network=host puts the BuildKit container itself on the host
-      # network so that image pulls (FROM ...) and RUN package installs
-      # (pip, apt-get) can reach Docker Hub and PyPI without going through
-      # Docker's bridge, which has restricted egress on ubuntu-22.04 runners.
+      # Use the docker driver (inline BuildKit inside the daemon, no separate
+      # BuildKit container).  This avoids the docker-container driver's
+      # network isolation issue where RUN instructions run inside a sub-container
+      # and lose access to the host network even with --network=host.
       - uses: docker/setup-buildx-action@v3
         with:
-          driver-opts: network=host
+          driver: docker
 
       # Build all service images.
       # Excludes input-cv: its base image (nvcr.io/nvidia/deepstream-l4t) is
