@@ -331,10 +331,6 @@ class TestRuntimeLogPIILint:
 
         # We can test _parse_snapshot directly without DB
         import importlib
-        spec = importlib.util.spec_from_file_location(
-            "audience_sink",
-            _SERVICES_ROOT / "dashboard-api" / "dashboard_api" / "audience_sink.py",
-        )
 
         root = logging.getLogger()
         handler = _install_capture(root)
@@ -357,12 +353,6 @@ class TestRuntimeLogPIILint:
             }).encode()
 
             # Import and call _parse_snapshot
-            import importlib.util
-            spec2 = importlib.util.spec_from_file_location(
-                "audience_sink_mod",
-                _SERVICES_ROOT / "dashboard-api" / "dashboard_api" / "audience_sink.py",
-            )
-            mod = importlib.util.module_from_spec(spec2)
             # Patch out imports that require DB
             import unittest.mock
             with unittest.mock.patch.dict("sys.modules", {
@@ -377,7 +367,7 @@ class TestRuntimeLogPIILint:
                 "dashboard_api.models": unittest.mock.MagicMock(),
                 "aiomqtt": unittest.mock.MagicMock(),
             }):
-                spec2.loader.exec_module(mod)
+                mod = importlib.import_module("dashboard_api.audience_sink")
                 result = mod._parse_snapshot(bad_payload)
 
             assert result is None, "Privacy-violating payload should return None"
