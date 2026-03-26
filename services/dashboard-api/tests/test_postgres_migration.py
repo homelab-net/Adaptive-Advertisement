@@ -51,7 +51,7 @@ def _run_alembic(command: str) -> None:
     """Run an alembic command against the test postgres URL."""
     env = {**os.environ, "DASHBOARD_DATABASE_URL": _PG_URL}
     result = subprocess.run(
-        ["python", "-m", "alembic", command],
+        ["python", "-m", "alembic", *command.split()],
         cwd=str(_SERVICE_DIR),
         env=env,
         capture_output=True,
