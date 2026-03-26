@@ -42,7 +42,7 @@ COPY services/player/fallback_bundle/ ./fallback_bundle/
 # Generate built-in fallback slate — dark-navy 1920x1080 PNG (pure Python, no PIL).
 # Always present in the image as the last-resort asset (selection priority 6).
 # Skipped during auto-discovery if any other asset exists in bundle or library.
-RUN python3 -c "
+RUN python3 <<'PYEOF'
 import struct, zlib
 from pathlib import Path
 
@@ -62,7 +62,7 @@ out = Path('/app/fallback_bundle/fallback-builtin.png')
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_bytes(solid_png(1920, 1080, 14, 20, 35))
 print(f'generated {out} ({out.stat().st_size} bytes)')
-"
+PYEOF
 
 # Runtime configuration defaults
 ENV PLAYER_CONTRACT_DIR=/app/contracts
