@@ -14,6 +14,8 @@ for _svc in (
     "decision-optimizer",
     "creative",
     "supervisor",
+    "dashboard-api",
+    "shared",
 ):
     _p = str(_ROOT / "services" / _svc)
     if _p not in sys.path:
