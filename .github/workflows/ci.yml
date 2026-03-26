@@ -216,23 +216,12 @@ jobs:
           docker compose version
           docker buildx ls
 
-      - name: Select docker-driver builder (avoids moby/buildkit pull)
-        run: docker buildx use default
-
-      - name: Build service images (excluding input-cv and image-only services)
+      - name: Start compose stack with inline build (excluding input-cv and dashboard-ui)
         env:
           RENDERER_BACKEND: stub
           BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
         run: |
-          docker compose build \
-            audience-state creative \
-            decision-optimizer player supervisor dashboard-api
-
-      - name: Start compose stack (excluding input-cv and dashboard-ui)
-        env:
-          RENDERER_BACKEND: stub
-        run: |
-          docker compose up -d \
+          docker compose up --build -d \
             mosquitto postgres dashboard-db-migrate \
             audience-state creative decision-optimizer \
             player supervisor dashboard-api
@@ -323,19 +312,17 @@ jobs:
           docker compose version
           docker buildx ls
 
-      - name: Select docker-driver builder (avoids moby/buildkit pull)
-        run: docker buildx use default
-
-      - name: Build service images (excluding input-cv and image-only services)
+      # Use docker build directly — bypasses docker compose build's bake layer
+      # which fails on Docker Compose v5 + docker driver without extra config.
+      # Build context is repo root (.) for all services except dashboard-ui.
+      - name: Build service images (excluding input-cv)
         env:
-          RENDERER_BACKEND: stub
           BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
         run: |
-          docker compose build \
-            audience-state \
-            creative \
-            decision-optimizer \
-            player \
-            supervisor \
-            dashboard-api \
-            dashboard-ui
+          docker build -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    .
+          docker build -f services/creative/Dockerfile           -t adaptive-advertisement-creative           .
+          docker build -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer .
+          docker build -f services/player/Dockerfile             -t adaptive-advertisement-player             .
+          docker build -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         .
+          docker build -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      .
+          docker build -f services/dashboard-ui/Dockerfile       -t adaptive-advertisement-dashboard-ui       services/dashboard-ui
