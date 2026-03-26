@@ -214,8 +214,20 @@ jobs:
           docker info | head -20
           docker compose version
 
+      # Disable IPv6 in Docker daemon and set fast DNS.
+      # GitHub-hosted runners often have broken IPv6 routing; Python / pip
+      # default to trying IPv6 first, causing a ~20 s TCP-SYN timeout before
+      # falling back to IPv4.  Disabling IPv6 at the daemon level eliminates
+      # that timeout so pip can reach PyPI immediately over IPv4.
+      - name: Configure Docker daemon (disable IPv6, set DNS)
+        run: |
+          sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
+          {"dns": ["1.1.1.1", "8.8.8.8"], "ipv6": false}
+          EOF
+          sudo systemctl restart docker
+          sleep 3
+
       # Pull base images explicitly so they are cached before the builds.
-      # This separates base-image-pull failures from Dockerfile build failures.
       - name: Pre-pull base images
         run: docker pull python:3.11-slim
 
@@ -324,6 +336,16 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+
+      # Disable IPv6 in Docker daemon and set fast DNS (same rationale as
+      # compose-smoke job above).
+      - name: Configure Docker daemon (disable IPv6, set DNS)
+        run: |
+          sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
+          {"dns": ["1.1.1.1", "8.8.8.8"], "ipv6": false}
+          EOF
+          sudo systemctl restart docker
+          sleep 3
 
       # Pull base images explicitly so they are cached before the builds.
       - name: Pre-pull base images
