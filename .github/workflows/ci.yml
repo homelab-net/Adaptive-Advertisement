@@ -209,43 +209,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Use the docker driver (inline BuildKit inside the daemon, no separate
-      # BuildKit container).  This avoids the docker-container driver's
-      # network isolation issue where RUN instructions run inside a sub-container
-      # and lose access to the host network even with --network=host.
-      - uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker
-
       - name: Diagnose Docker environment
         run: |
           docker info | head -20
           docker compose version
-          docker buildx ls
 
-      # Pre-build service images using docker buildx build --load --provenance=false.
+      # Pre-build service images using plain docker build --network=host.
       # docker compose up without --build will then find the images already in the
       # local daemon.  Compose names images as {project}-{service}.
       # --network=host on the build command puts each RUN-instruction container
       # on the host network so pip/apt-get can reach the internet.
-      # (driver-opts: network=host handles image pulls; --network=host here
-      #  handles pip/apt-get inside RUN steps.)
       - name: Build service images for compose stack
         run: |
           echo "=== audience-state ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
+          docker build --network=host -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
           echo "=== creative ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
+          docker build --network=host -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
           echo "=== decision-optimizer ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
+          docker build --network=host -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
           echo "=== player ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
+          docker build --network=host -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
           echo "=== supervisor ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
+          docker build --network=host -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
           echo "=== dashboard-api ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
+          docker build --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
           echo "=== dashboard-db-migrate ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-db-migrate . && \
+          docker build --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-db-migrate . && \
           echo "=== all images built ==="
 
       - name: Start compose stack (excluding input-cv and dashboard-ui)
@@ -331,38 +320,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Use the docker driver (inline BuildKit inside the daemon, no separate
-      # BuildKit container).  This avoids the docker-container driver's
-      # network isolation issue where RUN instructions run inside a sub-container
-      # and lose access to the host network even with --network=host.
-      - uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker
-
-      # Build all service images.
+      # Build all service images using plain docker build --network=host.
       # Excludes input-cv: its base image (nvcr.io/nvidia/deepstream-l4t) is
       # not available for x86_64; validated on target Jetson hardware.
       # Excludes mosquitto and postgres: image-only services with no build directive.
-      # --load: export the built image into the local Docker daemon image store.
-      # --provenance=false: suppress OCI provenance attestation (not needed in CI).
       # --network=host: put each RUN-instruction container on the host network
-      #   so pip/apt-get can reach the internet (complements driver-opts: network=host
-      #   above which covers image pulls by the BuildKit daemon itself).
+      #   so pip/apt-get can reach the internet.
       # Build context is repo root (.) for all services except dashboard-ui.
       - name: Build service images (excluding input-cv)
         run: |
           echo "=== audience-state ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
+          docker build --network=host -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
           echo "=== creative ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
+          docker build --network=host -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
           echo "=== decision-optimizer ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
+          docker build --network=host -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
           echo "=== player ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
+          docker build --network=host -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
           echo "=== supervisor ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
+          docker build --network=host -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
           echo "=== dashboard-api ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
+          docker build --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
           echo "=== dashboard-ui ===" && \
-          docker buildx build --load --provenance=false --network=host -f services/dashboard-ui/Dockerfile       -t adaptive-advertisement-dashboard-ui       services/dashboard-ui && \
+          docker build --network=host -f services/dashboard-ui/Dockerfile       -t adaptive-advertisement-dashboard-ui       services/dashboard-ui && \
           echo "=== all images built ==="

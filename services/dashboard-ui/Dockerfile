@@ -1,13 +1,14 @@
+# syntax=docker/dockerfile:1
 # ── build stage ────────────────────────────────────────────────────────────
 FROM node:20-slim AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --prefer-offline
+RUN --network=host npm ci --prefer-offline
 
 COPY . .
-RUN npm run build          # outputs to /app/dist
+RUN --network=host npm run build          # outputs to /app/dist
 
 
 # ── runtime stage ──────────────────────────────────────────────────────────
