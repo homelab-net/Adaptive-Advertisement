@@ -222,6 +222,7 @@ jobs:
       - name: Build service images (excluding input-cv and image-only services)
         env:
           RENDERER_BACKEND: stub
+          BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
         run: |
           docker compose build \
             audience-state creative \
@@ -328,6 +329,7 @@ jobs:
       - name: Build service images (excluding input-cv and image-only services)
         env:
           RENDERER_BACKEND: stub
+          BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
         run: |
           docker compose build \
             audience-state \
