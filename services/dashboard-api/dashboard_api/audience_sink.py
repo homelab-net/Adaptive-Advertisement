@@ -18,9 +18,9 @@ from datetime import datetime, timezone
 
 import aiomqtt
 
-from .config import settings
-from .db import AsyncSessionLocal
-from .models import AudienceSnapshot
+from dashboard_api.config import settings
+from dashboard_api.db import AsyncSessionLocal
+from dashboard_api.models import AudienceSnapshot
 
 log = logging.getLogger(__name__)
 
@@ -47,11 +47,7 @@ def _parse_snapshot(payload: bytes) -> AudienceSnapshot | None:
         or privacy.get("contains_face_embeddings", False)
     ):
         log.warning(
-            "audience-sink: ICD-3 privacy violation — dropping message "
-            "(contains_images=%s contains_frame_urls=%s contains_face_embeddings=%s)",
-            privacy.get("contains_images"),
-            privacy.get("contains_frame_urls"),
-            privacy.get("contains_face_embeddings"),
+            "audience-sink: ICD-3 privacy violation — dropping message (privacy flags set)"
         )
         return None
 
