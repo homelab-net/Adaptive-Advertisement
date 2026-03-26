@@ -28,7 +28,7 @@ jobs:
           cache: pip
 
       - name: Install test deps
-        run: pip install jsonschema>=4.21 pytest>=8.0
+        run: pip install "jsonschema>=4.21" "pytest>=8.0"
 
       - name: Run contract tests
         run: python -m pytest tests/contract/ -v --tb=short
@@ -45,31 +45,31 @@ jobs:
         include:
           - service: input-cv
             path: services/input-cv
-            extra_deps: "pytest>=8.2 pytest-asyncio>=0.23 pytest-aiohttp>=1.0 pytest-timeout>=2.3 freezegun>=1.5"
+            extra_deps: "pytest pytest-asyncio pytest-aiohttp pytest-timeout freezegun"
 
           - service: audience-state
             path: services/audience-state
-            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23 pytest-aiohttp>=1.0"
+            extra_deps: "pytest pytest-asyncio pytest-aiohttp"
 
           - service: decision-optimizer
             path: services/decision-optimizer
-            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23 pytest-aiohttp>=1.0"
+            extra_deps: "pytest pytest-asyncio pytest-aiohttp"
 
           - service: player
             path: services/player
-            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23 pytest-aiohttp>=1.0"
+            extra_deps: "pytest pytest-asyncio pytest-aiohttp"
 
           - service: creative
             path: services/creative
-            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23 pytest-aiohttp>=1.0"
+            extra_deps: "pytest pytest-asyncio pytest-aiohttp"
 
           - service: supervisor
             path: services/supervisor
-            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23 aiohttp>=3.9"
+            extra_deps: "pytest pytest-asyncio aiohttp"
 
           - service: dashboard-api
             path: services/dashboard-api
-            extra_deps: "pytest>=8.0 pytest-asyncio>=0.23 httpx>=0.27 aiosqlite>=0.20 alembic>=1.13"
+            extra_deps: "pytest pytest-asyncio httpx aiosqlite alembic"
 
     steps:
       - uses: actions/checkout@v4
@@ -124,8 +124,9 @@ jobs:
           cache: pip
 
       - name: Install dashboard-api and test deps
-        working-directory: services/dashboard-api
-        run: pip install -e "." pytest>=8.0 pytest-asyncio>=0.23 alembic>=1.13 asyncpg>=0.29
+        run: |
+          pip install -e services/shared
+          pip install -e services/dashboard-api pytest pytest-asyncio alembic asyncpg
 
       - name: Run postgres migration tests
         working-directory: services/dashboard-api
@@ -158,15 +159,16 @@ jobs:
             -e services/decision-optimizer \
             -e services/player \
             -e services/creative \
-            -e services/supervisor
+            -e services/supervisor \
+            -e services/dashboard-api
 
       - name: Install integration test deps
         run: |
           pip install \
-            pytest>=8.0 \
-            pytest-asyncio>=0.23 \
-            aiohttp>=3.9 \
-            jsonschema>=4.21
+            pytest \
+            pytest-asyncio \
+            aiohttp \
+            jsonschema
 
       - name: Run integration tests
         env:
@@ -190,7 +192,7 @@ jobs:
           cache: pip
 
       - name: Install test deps
-        run: pip install pytest>=8.0 pydantic-settings>=2.0
+        run: pip install pytest pydantic-settings
 
       - name: Run hardcoded-value gate
         run: python -m pytest tests/test_no_hardcoded_values.py -v --tb=short
@@ -213,7 +215,7 @@ jobs:
           RENDERER_BACKEND: stub
         run: |
           docker compose build \
-            mosquitto postgres audience-state creative \
+            audience-state creative \
             decision-optimizer player supervisor dashboard-api
 
       - name: Start compose stack (excluding input-cv and dashboard-ui)
@@ -311,8 +313,6 @@ jobs:
           RENDERER_BACKEND: stub
         run: |
           docker compose build \
-            mosquitto \
-            postgres \
             audience-state \
             creative \
             decision-optimizer \
