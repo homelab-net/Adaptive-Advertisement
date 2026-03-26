@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # Player service
 #
 # Build context: repository root (required so contracts/ can be copied in).

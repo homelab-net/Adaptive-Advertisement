@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # Supervisor service — ICD-8
 #
 # Requires Docker socket access to restart managed containers:

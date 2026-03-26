@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # Audience-state service
 #
 # Build context: repository root.

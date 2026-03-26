@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # ── build stage ────────────────────────────────────────────────────────────
 FROM node:20-slim AS builder
 

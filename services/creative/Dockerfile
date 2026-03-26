@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # Creative service
 #
 # Build context: repository root.

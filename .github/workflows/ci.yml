@@ -214,6 +214,11 @@ jobs:
           docker info | head -20
           docker compose version
 
+      # Pull base images explicitly so they are cached before the builds.
+      # This separates base-image-pull failures from Dockerfile build failures.
+      - name: Pre-pull base images
+        run: docker pull python:3.11-slim
+
       # Pre-build service images using plain docker build --network=host.
       # docker compose up without --build will then find the images already in the
       # local daemon.  Compose names images as {project}-{service}.
@@ -319,6 +324,13 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+
+      # Pull base images explicitly so they are cached before the builds.
+      - name: Pre-pull base images
+        run: |
+          docker pull python:3.11-slim
+          docker pull node:20-slim
+          docker pull nginx:1.27-alpine
 
       # Build all service images using plain docker build --network=host.
       # Excludes input-cv: its base image (nvcr.io/nvidia/deepstream-l4t) is
