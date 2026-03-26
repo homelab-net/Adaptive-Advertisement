@@ -10,11 +10,11 @@ RUN pip install --no-cache-dir /tmp/shared_pkg && rm -rf /tmp/shared_pkg
 # pyproject.toml copied for reference (alembic env.py uses it for package lookup)
 COPY services/dashboard-api/pyproject.toml ./
 RUN pip install --no-cache-dir \
-    fastapi>=0.111 \
+    "fastapi>=0.111" \
     "uvicorn[standard]>=0.29" \
     "sqlalchemy[asyncio]>=2.0" \
-    asyncpg>=0.29 \
-    alembic>=1.13 \
+    "asyncpg>=0.29" \
+    "alembic>=1.13" \
     "pydantic>=2.6" \
     "pydantic-settings>=2.2" \
     "aiohttp>=3.9" \
