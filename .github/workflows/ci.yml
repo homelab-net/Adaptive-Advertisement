@@ -216,12 +216,27 @@ jobs:
           docker compose version
           docker buildx ls
 
-      - name: Start compose stack with inline build (excluding input-cv and dashboard-ui)
+      # Pre-build service images using docker build --provenance=false to avoid
+      # BuildKit attestation failures on the docker driver.  docker compose up
+      # without --build will use the images already present in the local daemon.
+      # Compose names images as {project}-{service} (project = adaptive-advertisement).
+      - name: Build service images for compose stack
         env:
-          RENDERER_BACKEND: stub
           BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
         run: |
-          docker compose up --build -d \
+          docker build --provenance=false -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    .
+          docker build --provenance=false -f services/creative/Dockerfile           -t adaptive-advertisement-creative           .
+          docker build --provenance=false -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer .
+          docker build --provenance=false -f services/player/Dockerfile             -t adaptive-advertisement-player             .
+          docker build --provenance=false -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         .
+          docker build --provenance=false -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      .
+          docker build --provenance=false -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-db-migrate .
+
+      - name: Start compose stack (excluding input-cv and dashboard-ui)
+        env:
+          RENDERER_BACKEND: stub
+        run: |
+          docker compose up -d \
             mosquitto postgres dashboard-db-migrate \
             audience-state creative decision-optimizer \
             player supervisor dashboard-api
@@ -314,15 +329,17 @@ jobs:
 
       # Use docker build directly — bypasses docker compose build's bake layer
       # which fails on Docker Compose v5 + docker driver without extra config.
+      # --provenance=false disables BuildKit OCI attestation metadata which
+      # is not supported by the docker driver and causes a build failure.
       # Build context is repo root (.) for all services except dashboard-ui.
       - name: Build service images (excluding input-cv)
         env:
           BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
         run: |
-          docker build -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    .
-          docker build -f services/creative/Dockerfile           -t adaptive-advertisement-creative           .
-          docker build -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer .
-          docker build -f services/player/Dockerfile             -t adaptive-advertisement-player             .
-          docker build -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         .
-          docker build -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      .
-          docker build -f services/dashboard-ui/Dockerfile       -t adaptive-advertisement-dashboard-ui       services/dashboard-ui
+          docker build --provenance=false -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    .
+          docker build --provenance=false -f services/creative/Dockerfile           -t adaptive-advertisement-creative           .
+          docker build --provenance=false -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer .
+          docker build --provenance=false -f services/player/Dockerfile             -t adaptive-advertisement-player             .
+          docker build --provenance=false -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         .
+          docker build --provenance=false -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      .
+          docker build --provenance=false -f services/dashboard-ui/Dockerfile       -t adaptive-advertisement-dashboard-ui       services/dashboard-ui
