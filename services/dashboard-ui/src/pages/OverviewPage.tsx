@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Users, Activity, Wifi, WifiOff, AlertTriangle, ShieldAlert, ShieldCheck,
+  Users, Activity, WifiOff, AlertTriangle, ShieldAlert, ShieldCheck,
   RefreshCw, Eye, Zap, Timer, Radio,
 } from 'lucide-react'
 import { api } from '@/lib/api'

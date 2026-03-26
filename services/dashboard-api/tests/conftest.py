@@ -13,6 +13,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import StaticPool
 
 # Override DB URL before any dashboard_api imports
 _TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
@@ -25,7 +26,12 @@ from dashboard_api.db import get_session  # noqa: E402
 
 @pytest_asyncio.fixture
 async def engine():
-    eng = create_async_engine(_TEST_DB_URL, echo=False)
+    eng = create_async_engine(
+        _TEST_DB_URL,
+        echo=False,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield eng

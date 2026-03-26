@@ -143,8 +143,6 @@ services:
     depends_on:
       mosquitto:
         condition: service_healthy
-      input-cv:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8082/healthz || exit 1"]
       interval: 15s
