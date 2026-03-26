@@ -209,6 +209,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Properly initialise BuildKit for GitHub Actions.  Without this step the
+      # active buildx builder may be in a broken or default-unconfigured state on
+      # ubuntu-22.04 runners, causing docker build to fail mid-layer.
+      - uses: docker/setup-buildx-action@v3
 
       - name: Diagnose Docker environment
         run: |
@@ -216,28 +220,25 @@ jobs:
           docker compose version
           docker buildx ls
 
-      # Pre-build service images using docker build --provenance=false to avoid
-      # BuildKit attestation failures on the docker driver.  docker compose up
-      # without --build will use the images already present in the local daemon.
-      # Compose names images as {project}-{service} (project = adaptive-advertisement).
+      # Pre-build service images using docker buildx build --load --provenance=false.
+      # docker compose up without --build will then find the images already in the
+      # local daemon.  Compose names images as {project}-{service}.
       - name: Build service images for compose stack
-        env:
-          BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
         run: |
           echo "=== audience-state ===" && \
-          docker build --provenance=false --network=host -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
+          docker buildx build --load --provenance=false -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
           echo "=== creative ===" && \
-          docker build --provenance=false --network=host -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
+          docker buildx build --load --provenance=false -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
           echo "=== decision-optimizer ===" && \
-          docker build --provenance=false --network=host -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
+          docker buildx build --load --provenance=false -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
           echo "=== player ===" && \
-          docker build --provenance=false --network=host -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
+          docker buildx build --load --provenance=false -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
           echo "=== supervisor ===" && \
-          docker build --provenance=false --network=host -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
+          docker buildx build --load --provenance=false -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
           echo "=== dashboard-api ===" && \
-          docker build --provenance=false --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
+          docker buildx build --load --provenance=false -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
           echo "=== dashboard-db-migrate ===" && \
-          docker build --provenance=false --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-db-migrate . && \
+          docker buildx build --load --provenance=false -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-db-migrate . && \
           echo "=== all images built ==="
 
       - name: Start compose stack (excluding input-cv and dashboard-ui)
@@ -323,39 +324,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Properly initialise BuildKit for GitHub Actions.  Without this step the
+      # active buildx builder may be in a broken or default-unconfigured state on
+      # ubuntu-22.04 runners, causing docker build to fail mid-layer.
+      - uses: docker/setup-buildx-action@v3
 
-      # Build all service images in parallel using compose.
-      # Uses RENDERER_BACKEND=stub so no GPU or display is required.
+      # Build all service images.
       # Excludes input-cv: its base image (nvcr.io/nvidia/deepstream-l4t) is
-      # not available for x86_64; it is validated on the target Jetson hardware.
+      # not available for x86_64; validated on target Jetson hardware.
       # Excludes mosquitto and postgres: image-only services with no build directive.
-      - name: Diagnose Docker environment
-        run: |
-          docker info | head -20
-          docker compose version
-          docker buildx ls
-
-      # Use docker build directly — bypasses docker compose build's bake layer
-      # which fails on Docker Compose v5 + docker driver without extra config.
-      # --provenance=false: disables BuildKit OCI attestation (unsupported by docker driver)
-      # --network=host: avoids Docker bridge DNS issues that prevent pip/apt-get reaching internet
+      # --load: export the built image into the local Docker daemon image store.
+      # --provenance=false: suppress OCI provenance attestation (not needed in CI).
       # Build context is repo root (.) for all services except dashboard-ui.
       - name: Build service images (excluding input-cv)
-        env:
-          BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
         run: |
           echo "=== audience-state ===" && \
-          docker build --provenance=false --network=host -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
+          docker buildx build --load --provenance=false -f services/audience-state/Dockerfile    -t adaptive-advertisement-audience-state    . && \
           echo "=== creative ===" && \
-          docker build --provenance=false --network=host -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
+          docker buildx build --load --provenance=false -f services/creative/Dockerfile           -t adaptive-advertisement-creative           . && \
           echo "=== decision-optimizer ===" && \
-          docker build --provenance=false --network=host -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
+          docker buildx build --load --provenance=false -f services/decision-optimizer/Dockerfile -t adaptive-advertisement-decision-optimizer . && \
           echo "=== player ===" && \
-          docker build --provenance=false --network=host -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
+          docker buildx build --load --provenance=false -f services/player/Dockerfile             -t adaptive-advertisement-player             . && \
           echo "=== supervisor ===" && \
-          docker build --provenance=false --network=host -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
+          docker buildx build --load --provenance=false -f services/supervisor/Dockerfile         -t adaptive-advertisement-supervisor         . && \
           echo "=== dashboard-api ===" && \
-          docker build --provenance=false --network=host -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
+          docker buildx build --load --provenance=false -f services/dashboard-api/Dockerfile      -t adaptive-advertisement-dashboard-api      . && \
           echo "=== dashboard-ui ===" && \
-          docker build --provenance=false --network=host -f services/dashboard-ui/Dockerfile       -t adaptive-advertisement-dashboard-ui       services/dashboard-ui && \
+          docker buildx build --load --provenance=false -f services/dashboard-ui/Dockerfile       -t adaptive-advertisement-dashboard-ui       services/dashboard-ui && \
           echo "=== all images built ==="
