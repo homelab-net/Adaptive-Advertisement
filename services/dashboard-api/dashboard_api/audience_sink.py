@@ -46,13 +46,7 @@ def _parse_snapshot(payload: bytes) -> AudienceSnapshot | None:
         or privacy.get("contains_frame_urls", False)
         or privacy.get("contains_face_embeddings", False)
     ):
-        log.warning(
-            "audience-sink: ICD-3 privacy violation — dropping message "
-            "(contains_images=%s contains_frame_urls=%s contains_face_embeddings=%s)",
-            privacy.get("contains_images"),
-            privacy.get("contains_frame_urls"),
-            privacy.get("contains_face_embeddings"),
-        )
+        log.warning("audience-sink: ICD-3 privacy violation — dropping message")
         return None
 
     try:
