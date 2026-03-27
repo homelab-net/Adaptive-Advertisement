@@ -2,7 +2,7 @@
 Tests for system status, safe-mode control, and audit event log.
 """
 import pytest
-from httpx import AsyncClient
+AsyncClient = pytest.importorskip("httpx").AsyncClient
 
 
 # ---------------------------------------------------------------------------

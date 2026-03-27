@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 import pytest
-from httpx import AsyncClient
+AsyncClient = pytest.importorskip("httpx").AsyncClient
 
 from dashboard_api.models import AudienceSnapshot, PlayEvent, UptimeEvent, Campaign, CampaignManifest, Manifest
 
