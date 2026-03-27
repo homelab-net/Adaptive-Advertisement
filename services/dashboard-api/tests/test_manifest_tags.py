@@ -6,7 +6,7 @@ Tests for audience tag endpoints on manifests:
   - POST /api/v1/manifests/sync-rules
 """
 import pytest
-from httpx import AsyncClient
+AsyncClient = pytest.importorskip("httpx").AsyncClient
 
 MANIFEST_JSON = {
     "schema_version": "1.0.0",

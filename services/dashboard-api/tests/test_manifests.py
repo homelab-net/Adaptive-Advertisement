@@ -11,7 +11,7 @@ Covers:
 - Duplicate manifest_id rejection
 """
 import pytest
-from httpx import AsyncClient
+AsyncClient = pytest.importorskip("httpx").AsyncClient
 
 MANIFEST_JSON = {
     "schema_version": "1.0.0",

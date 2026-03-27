@@ -10,7 +10,7 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, AsyncMock, MagicMock
 
-from httpx import AsyncClient
+AsyncClient = pytest.importorskip("httpx").AsyncClient
 
 from dashboard_api.models import AudienceSnapshot, PlayEvent, SafeModeState
 

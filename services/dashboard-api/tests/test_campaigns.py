@@ -9,7 +9,7 @@ Covers:
 - Archiving campaigns
 """
 import pytest
-from httpx import AsyncClient
+AsyncClient = pytest.importorskip("httpx").AsyncClient
 
 
 async def _create_campaign(client: AsyncClient, name: str = "Test Campaign") -> dict:
