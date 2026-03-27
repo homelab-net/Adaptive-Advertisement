@@ -68,6 +68,38 @@ Reason: this validates container orchestration and runtime wiring, but local env
 3. If compose-smoke remains red, inspect failing service health endpoint logs and pin to service-level defects.
 4. Gate merges on required checks listed above.
 
+## Why this used to pass, then regressed after dashboard integrations
+
+Short answer: both the **test surface area** and the **dashboard runtime code paths** changed quickly across 2026-03-24 → 2026-03-25.
+
+Timeline summary:
+
+1. `2026-03-24` established the earlier "green anchor" period and introduced CI layers in phases (contract, integration/privacy, hygiene, compose smoke).
+2. `2026-03-25` added dashboard analytics sinks and new runtime-lint coverage for those sinks (`audience_sink` included).
+3. That same feature wave introduced two defects in the new path:
+   - import semantics incompatible with module-file loading in the lint harness
+   - privacy log tokens/value detail tripping the runtime PII patterns
+4. Result: historical runs could be green before this code path existed, while newer runs failed once both the new feature and stricter runtime-lint checks were active.
+
+This pattern is a real regression from feature expansion + stricter test coverage, not random CI flakiness.
+
+## Critical/high-priority closure tasks (actionable)
+
+### P0 (must be green to avoid runtime or policy break)
+
+1. Keep required CI gates hard-blocking on merge:
+   - contract tests
+   - unit matrix
+   - integration tests
+   - dashboard migration tests
+   - hygiene tests
+2. Ensure `dashboard-api` sinks remain privacy-safe under runtime lint (already fixed for `audience_sink`; keep as regression guard).
+
+### P1 (close quickly; deployment risk)
+
+1. Compose smoke must pass in real CI runners (Docker-enabled); treat local Docker absence as non-code warning only.
+2. Add release checklist item: when dashboard features add sink/background tasks, run integration + runtime-lint subset before merge.
+
 ## Repro commands executed in this environment
 
 - `PYTHONPATH=services/shared:services/audience-state:services/decision-optimizer:services/input-cv:services/player:services/creative:services/supervisor:services/dashboard-api pytest tests/contract -q`
