@@ -1,0 +1,17 @@
+# Adaptive Advertisement — hardware deployment overrides (Jetson)
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.hardware.yml --env-file .env.hardware up -d --build
+
+services:
+  input-cv:
+    environment:
+      # Enable real ingest path on hardware.
+      INPUT_CV_PIPELINE_BACKEND: deepstream
+    devices:
+      - /dev/video0:/dev/video0
+
+  player:
+    environment:
+      # Use real renderer on hardware.
+      RENDERER_BACKEND: mpv

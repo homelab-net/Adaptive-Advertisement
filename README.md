@@ -56,3 +56,14 @@ docs/
 | Camera | CSI / local-device (V4L2) |
 | MQTT | Eclipse Mosquitto 2.x |
 | Storage | 256 GB NVMe (pilot default) |
+
+## Hardware deployment quickstart (Jetson)
+
+1. Copy the hardware env template:
+   - `cp .env.hardware.example .env.hardware`
+2. Run preflight checks:
+   - `./tools/preflight-hardware.sh`
+3. Bring up the stack with hardware overrides:
+   - `docker compose -f docker-compose.yml -f docker-compose.hardware.yml --env-file .env.hardware up -d --build`
+
+The `docker-compose.hardware.yml` override enables real camera ingest (`deepstream` + `/dev/video0`) and the `mpv` renderer for on-device playback.
