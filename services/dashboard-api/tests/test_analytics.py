@@ -295,3 +295,60 @@ class TestUptimeSummary:
             "healthy_probes", "uptime_pct", "slo_target_pct", "slo_met",
         ):
             assert field in body
+
+
+# ---------------------------------------------------------------------------
+# AudienceSnapshot gender columns (CRM-003)
+# ---------------------------------------------------------------------------
+
+class TestAudienceSnapshotGenderColumns:
+    def _snapshot_with_gender(
+        self,
+        gender_male: float | None = None,
+        gender_female: float | None = None,
+        suppressed: bool = False,
+    ) -> AudienceSnapshot:
+        return AudienceSnapshot(
+            id=str(__import__("uuid").uuid4()),
+            sampled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+            presence_count=2,
+            presence_confidence=0.85,
+            state_stable=True,
+            pipeline_degraded=False,
+            demographics_suppressed=suppressed,
+            age_group_child=None,
+            age_group_young_adult=None,
+            age_group_adult=None,
+            age_group_senior=None,
+            gender_male=gender_male,
+            gender_female=gender_female,
+        )
+
+    async def test_gender_columns_persisted_and_retrievable(self, session):
+        snap = self._snapshot_with_gender(gender_male=0.70, gender_female=0.30)
+        session.add(snap)
+        await session.flush()
+
+        from sqlalchemy import select
+        result = await session.execute(
+            select(AudienceSnapshot).where(AudienceSnapshot.id == snap.id)
+        )
+        row = result.scalar_one()
+        assert row.gender_male == pytest.approx(0.70)
+        assert row.gender_female == pytest.approx(0.30)
+
+    async def test_gender_columns_null_when_suppressed(self, session):
+        snap = self._snapshot_with_gender(
+            gender_male=None, gender_female=None, suppressed=True
+        )
+        session.add(snap)
+        await session.flush()
+
+        from sqlalchemy import select
+        result = await session.execute(
+            select(AudienceSnapshot).where(AudienceSnapshot.id == snap.id)
+        )
+        row = result.scalar_one()
+        assert row.gender_male is None
+        assert row.gender_female is None
+        assert row.demographics_suppressed is True

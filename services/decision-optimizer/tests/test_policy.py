@@ -484,6 +484,112 @@ class TestWeightedSelection:
         eng = load_policy(str(p))
         assert eng._rules[0].weight == 1.0
 
+
+# ---------------------------------------------------------------------------
+# Gender demographic conditions (CRM-003)
+# ---------------------------------------------------------------------------
+
+class TestGenderConditions:
+    def _rule(self, **conditions) -> Rule:
+        return Rule(rule_id="r", priority=0, manifest_id="m", **conditions)
+
+    def _engine(self, rules: list[Rule]) -> PolicyEngine:
+        return PolicyEngine(PolicyConfig(rules=rules))
+
+    def _sig_with_gender(self, male: float, female: float, suppressed: bool = False) -> dict:
+        return make_signal(
+            count=1,
+            demographics={"gender": {"male": male, "female": female}},
+            demographics_suppressed=suppressed,
+        )
+
+    def test_gender_male_gte_matches(self):
+        r = self._rule(gender_male_gte=0.55)
+        assert r.matches(self._sig_with_gender(male=0.70, female=0.30))
+
+    def test_gender_male_gte_misses(self):
+        r = self._rule(gender_male_gte=0.55)
+        assert not r.matches(self._sig_with_gender(male=0.40, female=0.60))
+
+    def test_gender_female_gte_matches(self):
+        r = self._rule(gender_female_gte=0.55)
+        assert r.matches(self._sig_with_gender(male=0.30, female=0.70))
+
+    def test_gender_female_gte_misses(self):
+        r = self._rule(gender_female_gte=0.55)
+        assert not r.matches(self._sig_with_gender(male=0.70, female=0.30))
+
+    def test_gender_condition_blocked_when_suppressed(self):
+        r = self._rule(gender_male_gte=0.1)
+        # Even a very low threshold should not fire when demographics_suppressed=True
+        sig = self._sig_with_gender(male=0.99, female=0.01, suppressed=True)
+        assert not r.matches(sig)
+
+    def test_gender_absent_treated_as_zero(self):
+        r = self._rule(gender_male_gte=0.1)
+        # Signal has no gender key at all
+        sig = make_signal(
+            count=1,
+            demographics={"age_groups": {"adult": 0.8}},
+            demographics_suppressed=False,
+        )
+        assert not r.matches(sig)
+
+    def test_gender_and_presence_combined(self):
+        r = self._rule(presence_count_gte=2, gender_female_gte=0.6)
+        sig = make_signal(
+            count=3,
+            demographics={"gender": {"male": 0.3, "female": 0.7}},
+            demographics_suppressed=False,
+        )
+        assert r.matches(sig)
+        # Presence count too low → no match
+        sig_low = make_signal(
+            count=1,
+            demographics={"gender": {"male": 0.3, "female": 0.7}},
+            demographics_suppressed=False,
+        )
+        assert not r.matches(sig_low)
+
+    def test_gender_conditions_loaded_from_json(self, tmp_path):
+        rules_data = {
+            "schema_version": "1.0.0",
+            "rules": [
+                {
+                    "rule_id": "male-audience",
+                    "priority": 10,
+                    "manifest_id": "m-male",
+                    "conditions": {
+                        "presence_count_gte": 1,
+                        "gender_male_gte": 0.55,
+                    },
+                },
+                {
+                    "rule_id": "attract",
+                    "priority": 0,
+                    "manifest_id": "m-attract",
+                    "conditions": {},
+                },
+            ],
+        }
+        p = tmp_path / "gender_rules.json"
+        p.write_text(json.dumps(rules_data))
+        eng = load_policy(str(p))
+
+        male_sig = make_signal(
+            count=1,
+            demographics={"gender": {"male": 0.70, "female": 0.30}},
+            demographics_suppressed=False,
+        )
+        assert eng.evaluate(male_sig) == "m-male"
+
+        female_sig = make_signal(
+            count=1,
+            demographics={"gender": {"male": 0.30, "female": 0.70}},
+            demographics_suppressed=False,
+        )
+        assert eng.evaluate(female_sig) == "m-attract"
+
     def test_weighted_selection_ignores_non_matching_rules(self):
         """
         Non-matching rules must never appear in the weighted selection pool,

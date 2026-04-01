@@ -122,6 +122,15 @@
                 "senior":      { "type": "number", "minimum": 0.0, "maximum": 1.0 }
               }
             },
+            "gender": {
+              "description": "Smoothed coarse apparent-gender distribution. Values are visual-appearance-based probabilities summing to approximately 1.0. Aggregate probabilistic bins only — not identity or biometric data.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "male":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "female": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+              }
+            },
             "dwell_estimate_ms": {
               "description": "Smoothed average dwell time estimate for persons present, in milliseconds.",
               "type": "integer",

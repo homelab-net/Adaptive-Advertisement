@@ -40,6 +40,8 @@ age_group_child_gte          float — demographics.age_groups.child >= value
 age_group_young_adult_gte    float — demographics.age_groups.young_adult >= value
 age_group_adult_gte          float — demographics.age_groups.adult >= value
 age_group_senior_gte         float — demographics.age_groups.senior >= value
+gender_male_gte              float — demographics.gender.male >= value
+gender_female_gte            float — demographics.gender.female >= value
 demographics_suppressed_eq   bool  — state.stability.demographics_suppressed == value
 time_hour_gte                int   — UTC hour >= value (0-23)
 time_hour_lte                int   — UTC hour <= value (0-23)
@@ -68,6 +70,8 @@ _DEMOGRAPHIC_CONDITION_FIELDS = (
     "age_group_young_adult_gte",
     "age_group_adult_gte",
     "age_group_senior_gte",
+    "gender_male_gte",
+    "gender_female_gte",
 )
 
 
@@ -91,6 +95,8 @@ class Rule:
     age_group_young_adult_gte: Optional[float] = None
     age_group_adult_gte: Optional[float] = None
     age_group_senior_gte: Optional[float] = None
+    gender_male_gte: Optional[float] = None
+    gender_female_gte: Optional[float] = None
     demographics_suppressed_eq: Optional[bool] = None
     # Time-of-day conditions (UTC hour, inclusive bounds)
     time_hour_gte: Optional[int] = None
@@ -156,6 +162,18 @@ class Rule:
                     return False
             if self.age_group_senior_gte is not None:
                 if float(age_groups.get("senior", 0.0)) < self.age_group_senior_gte:
+                    return False
+
+            gender: dict = (
+                signal.get("state", {})
+                .get("demographics", {})
+                .get("gender", {})
+            )
+            if self.gender_male_gte is not None:
+                if float(gender.get("male", 0.0)) < self.gender_male_gte:
+                    return False
+            if self.gender_female_gte is not None:
+                if float(gender.get("female", 0.0)) < self.gender_female_gte:
                     return False
 
         # --- Time-of-day conditions ---
@@ -285,6 +303,8 @@ def load_policy(rules_file: str) -> PolicyEngine:
             age_group_young_adult_gte=cond.get("age_group_young_adult_gte"),
             age_group_adult_gte=cond.get("age_group_adult_gte"),
             age_group_senior_gte=cond.get("age_group_senior_gte"),
+            gender_male_gte=cond.get("gender_male_gte"),
+            gender_female_gte=cond.get("gender_female_gte"),
             demographics_suppressed_eq=cond.get("demographics_suppressed_eq"),
             time_hour_gte=cond.get("time_hour_gte"),
             time_hour_lte=cond.get("time_hour_lte"),

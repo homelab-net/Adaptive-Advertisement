@@ -60,7 +60,8 @@ def _parse_snapshot(payload: bytes) -> AudienceSnapshot | None:
 
         demographics_suppressed: bool = stability.get("demographics_suppressed", True)
         demographics = state.get("demographics", {})
-        age_groups = demographics.get("age_groups", {}) if not demographics_suppressed else {}
+        age_groups = demographics.get("age_group", {}) if not demographics_suppressed else {}
+        gender_bins = demographics.get("gender", {}) if not demographics_suppressed else {}
 
         return AudienceSnapshot(
             id=str(uuid.uuid4()),
@@ -74,6 +75,8 @@ def _parse_snapshot(payload: bytes) -> AudienceSnapshot | None:
             age_group_young_adult=age_groups.get("young_adult") if age_groups else None,
             age_group_adult=age_groups.get("adult") if age_groups else None,
             age_group_senior=age_groups.get("senior") if age_groups else None,
+            gender_male=gender_bins.get("male") if gender_bins else None,
+            gender_female=gender_bins.get("female") if gender_bins else None,
         )
     except (KeyError, TypeError, ValueError) as exc:
         log.warning("audience-sink: malformed ICD-3 message — dropping: %s", exc)

@@ -40,6 +40,8 @@ AUDIENCE_TAGS: set[str] = {
     "adult_with_child",
     "teenager_group",
     "seniors",
+    "male_focus",
+    "female_focus",
 }
 
 TIME_TAGS: set[str] = {
@@ -103,6 +105,16 @@ _AUDIENCE_CONDITIONS: dict[str, dict[str, Any]] = {
         "presence_confidence_gte": 0.7,
         "age_group_senior_gte": 0.4,
     },
+    "male_focus": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.6,
+        "gender_male_gte": 0.55,
+    },
+    "female_focus": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.6,
+        "gender_female_gte": 0.55,
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -134,6 +146,8 @@ _AUDIENCE_BASE_PRIORITY: dict[str, int] = {
     "adult_with_child": 10,
     "teenager_group":  10,
     "seniors":         10,
+    "male_focus":      10,
+    "female_focus":    10,
 }
 
 # Priority boosts applied when time tags are also present

@@ -443,3 +443,55 @@ class TestStabilityAndFreeze:
         signal = publisher.build_signal(window)
         assert signal is not None
         assert signal["source_quality"]["pipeline_degraded"] is True
+
+
+# ---------------------------------------------------------------------------
+# Gender demographic privacy audit (CRM-003)
+# ---------------------------------------------------------------------------
+
+class TestGenderPrivacyAudit:
+    def _obs_with_gender(self, message_id: str, male: float, female: float) -> dict:
+        obs = _make_observation(message_id=message_id)
+        obs["demographics"] = {
+            "age_group": {
+                "child": 0.0,
+                "young_adult": 0.3,
+                "adult": 0.5,
+                "senior": 0.2,
+            },
+            "gender": {"male": male, "female": female},
+            "suppressed": False,
+        }
+        return obs
+
+    def test_gender_bins_flow_through_icd2_to_icd3(self):
+        """Gender in ICD-2 demographics is smoothed and present in ICD-3 signal."""
+        window = _make_window()
+        consumer = _make_consumer(window)
+        for i in range(5):
+            obs = self._obs_with_gender(f"obs-{i}", male=0.7, female=0.3)
+            assert consumer.process(_raw(obs)) is True
+
+        publisher = SignalPublisher()
+        signal = publisher.build_signal(window)
+        assert signal is not None
+        assert "demographics" in signal["state"]
+        gender = signal["state"]["demographics"].get("gender", {})
+        assert gender.get("male") is not None
+        assert gender.get("female") is not None
+        assert signal["privacy"]["contains_face_embeddings"] is False
+
+    def test_gender_bins_contain_no_banned_keys(self):
+        """Serialized ICD-3 signal with gender data passes the banned-key egress audit."""
+        window = _make_window()
+        consumer = _make_consumer(window)
+        for i in range(5):
+            obs = self._obs_with_gender(f"obs-{i}", male=0.65, female=0.35)
+            consumer.process(_raw(obs))
+
+        publisher = SignalPublisher()
+        signal = publisher.build_signal(window)
+        assert signal is not None
+        signal_bytes = json.dumps(signal).encode("utf-8")
+        found = _has_banned_key_in_bytes(signal_bytes)
+        assert found == [], f"Banned keys in ICD-3 gender signal: {found}"

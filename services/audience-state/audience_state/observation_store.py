@@ -159,6 +159,23 @@ class ObservationWindow:
                 return {"suppressed": True}
             smoothed_ages[bin_name] = round(sum(values) / len(values), 4)  # type: ignore[arg-type]
 
+        # Average gender distributions (optional — only if ALL obs carry gender)
+        gender_bins = ["male", "female"]
+        smoothed_genders: dict[str, float] | None = None
+        if all(o.data["demographics"].get("gender") is not None for o in obs_with_demog):
+            genders: dict[str, float] = {}
+            for bin_name in gender_bins:
+                values = [
+                    o.data["demographics"]["gender"].get(bin_name)
+                    for o in obs_with_demog
+                ]
+                if any(v is None for v in values):
+                    genders = {}
+                    break
+                genders[bin_name] = round(sum(values) / len(values), 4)  # type: ignore[arg-type]
+            if genders:
+                smoothed_genders = genders
+
         # Use the latest dwell estimate
         latest_dwell = obs_with_demog[-1].data["demographics"].get("dwell_estimate_ms")
 
@@ -166,6 +183,8 @@ class ObservationWindow:
             "age_group": smoothed_ages,
             "suppressed": False,
         }
+        if smoothed_genders is not None:
+            result["gender"] = smoothed_genders
         if latest_dwell is not None:
             result["dwell_estimate_ms"] = latest_dwell
         return result

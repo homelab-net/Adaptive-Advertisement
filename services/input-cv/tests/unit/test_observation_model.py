@@ -10,6 +10,7 @@ from input_cv.observation.models import (
     BANNED_METADATA_KEYS,
     CvObservation,
     ObservationCounts,
+    ObservationDemographics,
     ObservationPrivacy,
 )
 
@@ -74,3 +75,46 @@ def test_banned_metadata_keys_is_nonempty():
     assert "frame" in BANNED_METADATA_KEYS
     assert "embedding" in BANNED_METADATA_KEYS
     assert "base64" in BANNED_METADATA_KEYS
+
+
+# ---------------------------------------------------------------------------
+# ObservationDemographics — gender field (CRM-003)
+# ---------------------------------------------------------------------------
+
+def test_demographics_gender_accepted():
+    d = ObservationDemographics(
+        age_group={"child": 0.0, "young_adult": 0.3, "adult": 0.5, "senior": 0.2},
+        gender={"male": 0.65, "female": 0.35},
+        dwell_estimate_ms=3000,
+        suppressed=False,
+    )
+    assert d.gender == {"male": 0.65, "female": 0.35}
+
+
+def test_demographics_gender_optional_none_by_default():
+    d = ObservationDemographics()
+    assert d.gender is None
+
+
+def test_demographics_gender_dict_accepts_float_values():
+    # gender is a dict[str, float] at model level; bin key enforcement is at schema level
+    d = ObservationDemographics(gender={"male": 0.6, "female": 0.4})
+    assert d.gender is not None
+    assert d.gender["male"] == pytest.approx(0.6)
+
+
+def test_observation_with_demographics_serializes_gender():
+    obs = CvObservation(
+        tenant_id="t1",
+        site_id="s1",
+        camera_id="cam-01",
+        pipeline_id="p1",
+        frame_seq=1,
+        demographics=ObservationDemographics(
+            gender={"male": 0.7, "female": 0.3},
+            suppressed=False,
+        ),
+    )
+    import json
+    payload = json.loads(obs.to_json_bytes())
+    assert payload["demographics"]["gender"] == {"male": 0.7, "female": 0.3}
