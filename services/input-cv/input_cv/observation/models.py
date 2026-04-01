@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -75,6 +75,24 @@ class ObservationCounts(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0, default=0.0)
 
 
+class ObservationDemographics(BaseModel):
+    """
+    Optional coarse demographic distributions for an observation window.
+
+    Privacy contract:
+    - All attributes are probabilistic aggregate bins — no per-person identifiers.
+    - gender bins represent coarse visual-appearance classification only.
+    - extra="forbid" prevents undeclared fields carrying biometric data.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    age_group: Optional[dict[str, float]] = None
+    gender: Optional[dict[str, float]] = None
+    dwell_estimate_ms: Optional[int] = Field(default=None, ge=0)
+    suppressed: Optional[bool] = None
+
+
 class CvObservation(BaseModel):
     """
     Single ICD-2 observation message.
@@ -98,6 +116,7 @@ class CvObservation(BaseModel):
     frame_seq: int = Field(ge=0)
     window_ms: int = Field(ge=0, default=100)
     counts: ObservationCounts = Field(default_factory=ObservationCounts)
+    demographics: Optional[ObservationDemographics] = None
     quality: dict[str, Any] = Field(default_factory=dict)
     privacy: ObservationPrivacy = Field(default_factory=ObservationPrivacy)
 

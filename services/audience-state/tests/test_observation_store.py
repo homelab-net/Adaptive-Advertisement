@@ -259,3 +259,59 @@ class TestDemographics:
         d = w.compute_demographics()
         assert d is not None
         assert d["suppressed"] is True
+
+
+# ---------------------------------------------------------------------------
+# Gender smoothing (CRM-003)
+# ---------------------------------------------------------------------------
+
+class TestGenderSmoothing:
+    def _demog_with_gender(self, male: float = 0.7, female: float = 0.3) -> dict:
+        return {
+            "age_group": {
+                "child": 0.0,
+                "young_adult": 0.3,
+                "adult": 0.5,
+                "senior": 0.2,
+            },
+            "gender": {"male": male, "female": female},
+            "dwell_estimate_ms": 2000,
+        }
+
+    def test_gender_smoothed_when_all_obs_have_it(self):
+        w = make_window(min_stability=1, conf_threshold=0.5)
+        w.add(make_observation(confidence=0.9, message_id="a",
+                               demographics=self._demog_with_gender(male=0.8, female=0.2)))
+        w.add(make_observation(confidence=0.9, message_id="b",
+                               demographics=self._demog_with_gender(male=0.6, female=0.4)))
+        d = w.compute_demographics()
+        assert d is not None
+        assert d["suppressed"] is False
+        assert "gender" in d
+        assert d["gender"]["male"] == pytest.approx(0.7, abs=1e-3)
+        assert d["gender"]["female"] == pytest.approx(0.3, abs=1e-3)
+
+    def test_gender_omitted_when_no_obs_have_it(self):
+        w = make_window(min_stability=1, conf_threshold=0.5)
+        demog_no_gender = {
+            "age_group": {"child": 0.0, "young_adult": 0.3, "adult": 0.5, "senior": 0.2},
+        }
+        w.add(make_observation(confidence=0.9, message_id="a", demographics=demog_no_gender))
+        w.add(make_observation(confidence=0.9, message_id="b", demographics=demog_no_gender))
+        d = w.compute_demographics()
+        assert d is not None
+        assert d["suppressed"] is False
+        assert "gender" not in d
+
+    def test_gender_omitted_when_only_some_obs_have_it(self):
+        w = make_window(min_stability=1, conf_threshold=0.5)
+        demog_no_gender = {
+            "age_group": {"child": 0.0, "young_adult": 0.3, "adult": 0.5, "senior": 0.2},
+        }
+        w.add(make_observation(confidence=0.9, message_id="a",
+                               demographics=self._demog_with_gender()))
+        w.add(make_observation(confidence=0.9, message_id="b", demographics=demog_no_gender))
+        d = w.compute_demographics()
+        assert d is not None
+        assert d["suppressed"] is False
+        assert "gender" not in d

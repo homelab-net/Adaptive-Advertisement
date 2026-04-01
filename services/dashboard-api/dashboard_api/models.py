@@ -284,6 +284,9 @@ class AudienceSnapshot(Base):
     age_group_young_adult: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     age_group_adult: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     age_group_senior: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    # Coarse gender bins — NULL when demographics_suppressed=True or pipeline lacks gender
+    gender_male: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    gender_female: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
 
     def __repr__(self) -> str:
         return f"<AudienceSnapshot count={self.presence_count} @ {self.sampled_at}>"

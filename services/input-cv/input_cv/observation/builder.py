@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import BANNED_METADATA_KEYS, CvObservation, ObservationCounts
+from .models import BANNED_METADATA_KEYS, CvObservation, ObservationCounts, ObservationDemographics
 
 
 class PrivacyViolationError(RuntimeError):
@@ -79,6 +79,16 @@ def build_observation(raw_meta: dict, context: ObservationContext) -> CvObservat
     if "pipeline_degraded" in raw_meta:
         quality["pipeline_degraded"] = bool(raw_meta["pipeline_degraded"])
 
+    demographics: ObservationDemographics | None = None
+    if "demographics" in raw_meta:
+        raw_demog = raw_meta["demographics"]
+        demographics = ObservationDemographics(
+            age_group=raw_demog.get("age_group"),
+            gender=raw_demog.get("gender"),
+            dwell_estimate_ms=raw_demog.get("dwell_estimate_ms"),
+            suppressed=raw_demog.get("suppressed"),
+        )
+
     return CvObservation(
         tenant_id=context.tenant_id,
         site_id=context.site_id,
@@ -86,5 +96,6 @@ def build_observation(raw_meta: dict, context: ObservationContext) -> CvObservat
         pipeline_id=context.pipeline_id,
         frame_seq=int(raw_meta.get("frame_seq", 0)),
         counts=counts,
+        demographics=demographics,
         quality=quality,
     )

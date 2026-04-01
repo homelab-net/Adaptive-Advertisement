@@ -112,6 +112,15 @@
             "senior":   { "type": "number", "minimum": 0.0, "maximum": 1.0 }
           }
         },
+        "gender": {
+          "description": "Coarse apparent-gender distribution over the observation window. Values are visual-appearance-based probabilities summing to approximately 1.0. Not identity or biometric data — aggregate probabilistic bins only.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "male":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "female": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+          }
+        },
         "dwell_estimate_ms": {
           "description": "Estimated average dwell time for persons present during the window, in milliseconds.",
           "type": "integer",

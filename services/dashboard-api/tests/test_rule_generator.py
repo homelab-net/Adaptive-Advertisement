@@ -412,3 +412,39 @@ class TestBuildRulesFile:
         eng = load_policy(str(rules_file))
         assert eng is not None
         assert len(eng._rules) > 0
+
+
+# ---------------------------------------------------------------------------
+# Gender audience tags (CRM-003)
+# ---------------------------------------------------------------------------
+
+class TestGenderAudienceTags:
+    def test_male_focus_in_audience_tags(self):
+        assert "male_focus" in AUDIENCE_TAGS
+
+    def test_female_focus_in_audience_tags(self):
+        assert "female_focus" in AUDIENCE_TAGS
+
+    def test_male_focus_generates_gender_male_gte_condition(self):
+        rules = generate_rules_for_manifest(_manifest("m", ["male_focus"]))
+        assert len(rules) == 1
+        cond = rules[0]["conditions"]
+        assert "gender_male_gte" in cond
+        assert cond["gender_male_gte"] == pytest.approx(0.55)
+        assert cond["presence_count_gte"] == 1
+
+    def test_female_focus_generates_gender_female_gte_condition(self):
+        rules = generate_rules_for_manifest(_manifest("m", ["female_focus"]))
+        assert len(rules) == 1
+        cond = rules[0]["conditions"]
+        assert "gender_female_gte" in cond
+        assert cond["gender_female_gte"] == pytest.approx(0.55)
+        assert cond["presence_count_gte"] == 1
+
+    def test_gender_tags_have_conditions_entry(self):
+        assert "male_focus" in _AUDIENCE_CONDITIONS
+        assert "female_focus" in _AUDIENCE_CONDITIONS
+
+    def test_gender_tags_have_base_priority(self):
+        assert "male_focus" in _AUDIENCE_BASE_PRIORITY
+        assert "female_focus" in _AUDIENCE_BASE_PRIORITY

@@ -218,3 +218,55 @@ class TestAdditionalProperties:
     def test_unknown_demographics_field_rejected(self, valid):
         valid["demographics"] = {"face_id": "abc123"}
         assert_invalid(SCHEMA, valid)
+
+
+# ---------------------------------------------------------------------------
+# Gender demographic bins (CRM-003)
+# ---------------------------------------------------------------------------
+
+class TestGenderDemographics:
+    def test_with_gender_bins_valid(self, valid):
+        valid["demographics"] = {
+            "gender": {"male": 0.70, "female": 0.30},
+            "suppressed": False,
+        }
+        assert_valid(SCHEMA, valid)
+
+    def test_gender_alongside_age_group_valid(self, valid):
+        valid["demographics"] = {
+            "age_group": {
+                "child": 0.0,
+                "young_adult": 0.30,
+                "adult": 0.50,
+                "senior": 0.20,
+            },
+            "gender": {"male": 0.65, "female": 0.35},
+            "dwell_estimate_ms": 4100,
+            "suppressed": False,
+        }
+        assert_valid(SCHEMA, valid)
+
+    def test_gender_bins_at_boundaries(self, valid):
+        valid["demographics"] = {
+            "gender": {"male": 0.0, "female": 1.0},
+            "suppressed": False,
+        }
+        assert_valid(SCHEMA, valid)
+
+    def test_gender_bin_below_minimum_rejected(self, valid):
+        valid["demographics"] = {
+            "gender": {"male": -0.1, "female": 1.0},
+        }
+        assert_invalid(SCHEMA, valid)
+
+    def test_gender_bin_above_maximum_rejected(self, valid):
+        valid["demographics"] = {
+            "gender": {"male": 1.1, "female": 0.0},
+        }
+        assert_invalid(SCHEMA, valid)
+
+    def test_unknown_gender_bin_rejected(self, valid):
+        valid["demographics"] = {
+            "gender": {"male": 0.5, "female": 0.4, "unknown_bin": 0.1},
+        }
+        assert_invalid(SCHEMA, valid)
