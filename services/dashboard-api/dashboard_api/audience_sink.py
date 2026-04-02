@@ -58,8 +58,8 @@ def _parse_snapshot(payload: bytes) -> AudienceSnapshot | None:
         produced_at_raw = msg.get("produced_at", "")
         sampled_at = datetime.fromisoformat(produced_at_raw.replace("Z", "+00:00"))
 
-        demographics_suppressed: bool = stability.get("demographics_suppressed", True)
         demographics = state.get("demographics", {})
+        demographics_suppressed: bool = demographics.get("suppressed", True)
         age_groups = demographics.get("age_group", {}) if not demographics_suppressed else {}
         gender_bins = demographics.get("gender", {}) if not demographics_suppressed else {}
 
