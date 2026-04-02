@@ -62,6 +62,10 @@ def _parse_snapshot(payload: bytes) -> AudienceSnapshot | None:
         demographics_suppressed: bool = demographics.get("suppressed", True)
         age_groups = demographics.get("age_group", {}) if not demographics_suppressed else {}
         gender_bins = demographics.get("gender", {}) if not demographics_suppressed else {}
+        attire_bins = demographics.get("attire", {}) if not demographics_suppressed else {}
+
+        attention_block = state.get("attention") or {}
+        attention_engaged = attention_block.get("engaged")
 
         return AudienceSnapshot(
             id=str(uuid.uuid4()),
@@ -77,6 +81,17 @@ def _parse_snapshot(payload: bytes) -> AudienceSnapshot | None:
             age_group_senior=age_groups.get("senior") if age_groups else None,
             gender_male=gender_bins.get("male") if gender_bins else None,
             gender_female=gender_bins.get("female") if gender_bins else None,
+            attire_formal=attire_bins.get("formal") if attire_bins else None,
+            attire_business_casual=attire_bins.get("business_casual") if attire_bins else None,
+            attire_casual=attire_bins.get("casual") if attire_bins else None,
+            attire_athletic=attire_bins.get("athletic") if attire_bins else None,
+            attire_outdoor_technical=attire_bins.get("outdoor_technical") if attire_bins else None,
+            attire_workwear_uniform=attire_bins.get("workwear_uniform") if attire_bins else None,
+            attire_streetwear=attire_bins.get("streetwear") if attire_bins else None,
+            attire_luxury_premium=attire_bins.get("luxury_premium") if attire_bins else None,
+            attire_lounge_comfort=attire_bins.get("lounge_comfort") if attire_bins else None,
+            attire_smart_occasion=attire_bins.get("smart_occasion") if attire_bins else None,
+            attention_engaged=float(attention_engaged) if attention_engaged is not None else None,
         )
     except (KeyError, TypeError, ValueError) as exc:
         log.warning("audience-sink: malformed ICD-3 message — dropping: %s", exc)

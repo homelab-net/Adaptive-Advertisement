@@ -118,3 +118,82 @@ def test_observation_with_demographics_serializes_gender():
     import json
     payload = json.loads(obs.to_json_bytes())
     assert payload["demographics"]["gender"] == {"male": 0.7, "female": 0.3}
+
+
+# ---------------------------------------------------------------------------
+# ObservationDemographics — attire field (CRM-005)
+# ---------------------------------------------------------------------------
+
+def test_demographics_attire_accepted():
+    attire = {b: 0.1 for b in [
+        "formal", "business_casual", "casual", "athletic",
+        "outdoor_technical", "workwear_uniform", "streetwear",
+        "luxury_premium", "lounge_comfort", "smart_occasion",
+    ]}
+    d = ObservationDemographics(attire=attire, suppressed=False)
+    assert d.attire == attire
+
+
+def test_demographics_attire_optional_none_by_default():
+    d = ObservationDemographics()
+    assert d.attire is None
+
+
+def test_observation_with_attire_serializes():
+    import json
+    from input_cv.observation.models import ObservationAttention
+    obs = CvObservation(
+        tenant_id="t1", site_id="s1", camera_id="cam-01", pipeline_id="p1",
+        frame_seq=2,
+        demographics=ObservationDemographics(
+            attire={"athletic": 0.6, "casual": 0.4},
+            suppressed=False,
+        ),
+    )
+    payload = json.loads(obs.to_json_bytes())
+    assert payload["demographics"]["attire"]["athletic"] == pytest.approx(0.6)
+
+
+# ---------------------------------------------------------------------------
+# ObservationAttention (CRM-004)
+# ---------------------------------------------------------------------------
+
+def test_attention_model_defaults_none():
+    from input_cv.observation.models import ObservationAttention
+    a = ObservationAttention()
+    assert a.engaged is None
+    assert a.ambient is None
+
+
+def test_attention_model_accepts_valid_values():
+    from input_cv.observation.models import ObservationAttention
+    a = ObservationAttention(engaged=0.7, ambient=0.3)
+    assert a.engaged == pytest.approx(0.7)
+    assert a.ambient == pytest.approx(0.3)
+
+
+def test_attention_model_rejects_out_of_range():
+    from input_cv.observation.models import ObservationAttention
+    with pytest.raises(ValidationError):
+        ObservationAttention(engaged=1.5)
+
+
+def test_observation_with_attention_serializes():
+    import json
+    from input_cv.observation.models import ObservationAttention
+    obs = CvObservation(
+        tenant_id="t1", site_id="s1", camera_id="cam-01", pipeline_id="p1",
+        frame_seq=3,
+        attention=ObservationAttention(engaged=0.8, ambient=0.2),
+    )
+    payload = json.loads(obs.to_json_bytes())
+    assert payload["attention"]["engaged"] == pytest.approx(0.8)
+    assert payload["attention"]["ambient"] == pytest.approx(0.2)
+
+
+def test_observation_attention_none_by_default():
+    obs = CvObservation(
+        tenant_id="t1", site_id="s1", camera_id="cam-01", pipeline_id="p1",
+        frame_seq=0,
+    )
+    assert obs.attention is None

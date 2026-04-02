@@ -19,6 +19,7 @@ def make_signal(
     message_id: str = "msg-1",
     demographics: dict | None = None,
     demographics_suppressed: bool = True,
+    attention: dict | None = None,
 ) -> dict:
     stability: dict = {
         "state_stable": state_stable,
@@ -30,7 +31,15 @@ def make_signal(
         "stability": stability,
     }
     if demographics is not None:
-        state["demographics"] = demographics
+        # Inject suppressed flag so policy.py can read it from the demographics block
+        state["demographics"] = {"suppressed": demographics_suppressed, **demographics}
+    elif not demographics_suppressed:
+        # No explicit demographics dict but suppressed=False: create a minimal block
+        # so the policy gate passes and demographic conditions can be evaluated.
+        state["demographics"] = {"suppressed": False}
+
+    if attention is not None:
+        state["attention"] = attention
 
     return {
         "schema_version": "1.0.0",

@@ -175,8 +175,8 @@ class TestDemographicConditions:
     def _rule(self, **conditions) -> Rule:
         return Rule(rule_id="r", priority=0, manifest_id="m", **conditions)
 
-    def _sig_with_demo(self, count=1, suppressed=False, **age_groups):
-        demo = {"age_groups": age_groups} if age_groups else {"age_groups": {}}
+    def _sig_with_demo(self, count=1, suppressed=False, **age_bins):
+        demo = {"age_group": age_bins} if age_bins else {}
         return make_signal(
             count=count,
             demographics=demo,
@@ -530,7 +530,7 @@ class TestGenderConditions:
         # Signal has no gender key at all
         sig = make_signal(
             count=1,
-            demographics={"age_groups": {"adult": 0.8}},
+            demographics={"age_group": {"adult": 0.8}},
             demographics_suppressed=False,
         )
         assert not r.matches(sig)
@@ -602,3 +602,178 @@ class TestGenderConditions:
         eng = self._engine(rules)
         for _ in range(50):
             assert eng.evaluate(make_signal(count=1)) == "m-match"
+
+
+# ---------------------------------------------------------------------------
+# Attention conditions (CRM-004)
+# ---------------------------------------------------------------------------
+
+class TestAttentionConditions:
+    def _rule(self, **conditions) -> Rule:
+        return Rule(rule_id="r", priority=0, manifest_id="m", **conditions)
+
+    def _engine(self, rules: list[Rule]) -> PolicyEngine:
+        return PolicyEngine(PolicyConfig(rules=rules))
+
+    def test_attention_gate_matches_when_above_threshold(self):
+        r = self._rule(attention_engaged_gte=0.35)
+        sig = make_signal(attention={"engaged": 0.5})
+        assert r.matches(sig)
+
+    def test_attention_gate_fails_when_below_threshold(self):
+        r = self._rule(attention_engaged_gte=0.35)
+        sig = make_signal(attention={"engaged": 0.2})
+        assert not r.matches(sig)
+
+    def test_attention_gate_passes_at_exact_threshold(self):
+        r = self._rule(attention_engaged_gte=0.35)
+        sig = make_signal(attention={"engaged": 0.35})
+        assert r.matches(sig)
+
+    def test_attention_absent_passes_silently(self):
+        """If no attention block in signal, attention gate must not block the rule."""
+        r = self._rule(attention_engaged_gte=0.35)
+        sig = make_signal()  # no attention block
+        assert r.matches(sig)
+
+    def test_attention_engaged_none_passes_silently(self):
+        """If attention block present but engaged key absent, gate passes."""
+        r = self._rule(attention_engaged_gte=0.35)
+        sig = make_signal(attention={"ambient": 0.9})  # no engaged key
+        assert r.matches(sig)
+
+    def test_no_attention_condition_ignores_attention_block(self):
+        """Rules without attention_engaged_gte are not affected by attention data."""
+        r = self._rule(presence_count_gte=1)
+        sig = make_signal(count=2, attention={"engaged": 0.0})
+        assert r.matches(sig)
+
+    def test_attention_with_presence_combined(self):
+        r = self._rule(presence_count_gte=1, attention_engaged_gte=0.4)
+        # Both conditions met
+        sig = make_signal(count=2, attention={"engaged": 0.5})
+        assert r.matches(sig)
+        # Attention too low
+        sig_low = make_signal(count=2, attention={"engaged": 0.1})
+        assert not r.matches(sig_low)
+        # Count too low
+        sig_no_count = make_signal(count=0, attention={"engaged": 0.9})
+        assert not r.matches(sig_no_count)
+
+    def test_attention_loaded_from_json(self, tmp_path):
+        rules_data = {
+            "schema_version": "1.0.0",
+            "rules": [
+                {
+                    "rule_id": "engaged",
+                    "priority": 10,
+                    "manifest_id": "m-engaged",
+                    "conditions": {"presence_count_gte": 1, "attention_engaged_gte": 0.35},
+                },
+                {
+                    "rule_id": "attract",
+                    "priority": 0,
+                    "manifest_id": "m-attract",
+                    "conditions": {},
+                },
+            ],
+        }
+        p = tmp_path / "attention.json"
+        p.write_text(__import__("json").dumps(rules_data))
+        eng = self._engine.__func__(self, [])
+        from decision_optimizer.policy import load_policy
+        eng = load_policy(str(p))
+
+        sig_with = make_signal(count=1, attention={"engaged": 0.5})
+        assert eng.evaluate(sig_with) == "m-engaged"
+
+        sig_without = make_signal(count=1)  # no attention → silent pass
+        assert eng.evaluate(sig_without) == "m-engaged"
+
+        sig_low = make_signal(count=1, attention={"engaged": 0.1})
+        assert eng.evaluate(sig_low) == "m-attract"
+
+
+# ---------------------------------------------------------------------------
+# Attire conditions (CRM-005)
+# ---------------------------------------------------------------------------
+
+class TestAttireConditions:
+    def _rule(self, **conditions) -> Rule:
+        return Rule(rule_id="r", priority=0, manifest_id="m", **conditions)
+
+    def _sig_with_attire(self, suppressed=False, **attire_bins) -> dict:
+        return make_signal(
+            count=1,
+            demographics={"attire": attire_bins} if attire_bins else {},
+            demographics_suppressed=suppressed,
+        )
+
+    def test_attire_athletic_gte_matches(self):
+        r = self._rule(attire_athletic_gte=0.45)
+        sig = self._sig_with_attire(athletic=0.6)
+        assert r.matches(sig)
+
+    def test_attire_athletic_gte_miss(self):
+        r = self._rule(attire_athletic_gte=0.45)
+        sig = self._sig_with_attire(athletic=0.3)
+        assert not r.matches(sig)
+
+    def test_attire_formal_gte_matches(self):
+        r = self._rule(attire_formal_gte=0.45)
+        sig = self._sig_with_attire(formal=0.5)
+        assert r.matches(sig)
+
+    def test_attire_condition_blocked_when_suppressed(self):
+        r = self._rule(attire_athletic_gte=0.1)
+        sig = self._sig_with_attire(suppressed=True, athletic=0.9)
+        assert not r.matches(sig)
+
+    def test_attire_absent_treated_as_zero(self):
+        r = self._rule(attire_streetwear_gte=0.1)
+        sig = make_signal(count=1, demographics={}, demographics_suppressed=False)
+        assert not r.matches(sig)
+
+    def test_attire_and_gender_combined(self):
+        r = self._rule(gender_female_gte=0.5, attire_athletic_gte=0.4)
+        sig = make_signal(
+            count=1,
+            demographics={
+                "gender": {"male": 0.3, "female": 0.7},
+                "attire": {"athletic": 0.6},
+            },
+            demographics_suppressed=False,
+        )
+        assert r.matches(sig)
+        # Fail on attire
+        sig_no_attire = make_signal(
+            count=1,
+            demographics={
+                "gender": {"male": 0.3, "female": 0.7},
+                "attire": {"athletic": 0.2},
+            },
+            demographics_suppressed=False,
+        )
+        assert not r.matches(sig_no_attire)
+
+    def test_all_attire_bins_loaded_from_json(self, tmp_path):
+        import json as _json
+        attire_bins = [
+            "attire_formal_gte", "attire_business_casual_gte", "attire_casual_gte",
+            "attire_athletic_gte", "attire_outdoor_technical_gte",
+            "attire_workwear_uniform_gte", "attire_streetwear_gte",
+            "attire_luxury_premium_gte", "attire_lounge_comfort_gte",
+            "attire_smart_occasion_gte",
+        ]
+        cond = {b: 0.1 for b in attire_bins}
+        rules_data = {
+            "schema_version": "1.0.0",
+            "rules": [{"rule_id": "r", "priority": 0, "manifest_id": "m", "conditions": cond}],
+        }
+        p = tmp_path / "attire.json"
+        p.write_text(_json.dumps(rules_data))
+        from decision_optimizer.policy import load_policy
+        eng = load_policy(str(p))
+        rule = eng._rules[0]
+        for bin_name in attire_bins:
+            assert getattr(rule, bin_name) == pytest.approx(0.1)

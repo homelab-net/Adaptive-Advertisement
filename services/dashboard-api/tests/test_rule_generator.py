@@ -448,3 +448,177 @@ class TestGenderAudienceTags:
     def test_gender_tags_have_base_priority(self):
         assert "male_focus" in _AUDIENCE_BASE_PRIORITY
         assert "female_focus" in _AUDIENCE_BASE_PRIORITY
+
+
+# ---------------------------------------------------------------------------
+# Attention gate auto-injection (CRM-004)
+# ---------------------------------------------------------------------------
+
+class TestAttentionGate:
+    def test_demographic_tags_get_attention_gate_injected(self):
+        """All demographic audience tags (not attract/general) get attention_engaged_gte."""
+        from dashboard_api.rule_generator import _ATTENTION_GATE_THRESHOLD, _ATTENTION_GATE_EXCLUDED
+        demographic_tags = [
+            t for t in AUDIENCE_TAGS if t not in _ATTENTION_GATE_EXCLUDED
+        ]
+        for tag in demographic_tags:
+            rules = generate_rules_for_manifest(_manifest("m", [tag]))
+            for r in rules:
+                if "reminder" not in r["rule_id"]:
+                    assert "attention_engaged_gte" in r["conditions"], \
+                        f"attention_engaged_gte not injected for tag {tag!r}"
+                    assert r["conditions"]["attention_engaged_gte"] == pytest.approx(_ATTENTION_GATE_THRESHOLD)
+
+    def test_attract_does_not_get_attention_gate(self):
+        rules = generate_rules_for_manifest(_manifest("m", ["attract"]))
+        assert "attention_engaged_gte" not in rules[0]["conditions"]
+
+    def test_general_does_not_get_attention_gate(self):
+        rules = generate_rules_for_manifest(_manifest("m", ["general"]))
+        assert "attention_engaged_gte" not in rules[0]["conditions"]
+
+    def test_reminder_rule_does_not_get_attention_gate(self):
+        rules = generate_rules_for_manifest(_manifest("m", ["solo_adult", "freq_recurring"]))
+        reminder = next(r for r in rules if "reminder" in r["rule_id"])
+        assert "attention_engaged_gte" not in reminder["conditions"]
+
+    def test_attention_gate_threshold_value(self):
+        from dashboard_api.rule_generator import _ATTENTION_GATE_THRESHOLD
+        assert _ATTENTION_GATE_THRESHOLD == pytest.approx(0.35)
+
+
+# ---------------------------------------------------------------------------
+# Attire audience tags (CRM-005)
+# ---------------------------------------------------------------------------
+
+class TestAttireTags:
+    _ATTIRE_TAGS = [
+        "attire_formal", "attire_business_casual", "attire_casual", "attire_athletic",
+        "attire_outdoor_technical", "attire_workwear_uniform", "attire_streetwear",
+        "attire_luxury_premium", "attire_lounge_comfort", "attire_smart_occasion",
+    ]
+
+    def test_all_attire_tags_in_audience_tags(self):
+        for tag in self._ATTIRE_TAGS:
+            assert tag in AUDIENCE_TAGS, f"{tag} missing from AUDIENCE_TAGS"
+
+    def test_all_attire_tags_have_conditions(self):
+        for tag in self._ATTIRE_TAGS:
+            assert tag in _AUDIENCE_CONDITIONS, f"{tag} missing from _AUDIENCE_CONDITIONS"
+
+    def test_all_attire_tags_have_base_priority(self):
+        for tag in self._ATTIRE_TAGS:
+            assert tag in _AUDIENCE_BASE_PRIORITY, f"{tag} missing from _AUDIENCE_BASE_PRIORITY"
+
+    def test_attire_athletic_generates_attire_athletic_gte_condition(self):
+        rules = generate_rules_for_manifest(_manifest("m", ["attire_athletic"]))
+        assert len(rules) == 1
+        cond = rules[0]["conditions"]
+        assert "attire_athletic_gte" in cond
+        assert cond["attire_athletic_gte"] == pytest.approx(0.45)
+
+    def test_high_confidence_tier_threshold_045(self):
+        for tag in ["attire_formal", "attire_athletic", "attire_outdoor_technical", "attire_workwear_uniform"]:
+            cond = _AUDIENCE_CONDITIONS[tag]
+            field = f"attire_{tag.replace('attire_', '')}_gte"
+            assert cond[field] == pytest.approx(0.45), f"Expected 0.45 for {tag}"
+
+    def test_moderate_confidence_tier_threshold_050(self):
+        for tag in ["attire_business_casual", "attire_streetwear", "attire_casual"]:
+            cond = _AUDIENCE_CONDITIONS[tag]
+            field = f"attire_{tag.replace('attire_', '')}_gte"
+            assert cond[field] == pytest.approx(0.50), f"Expected 0.50 for {tag}"
+
+    def test_experimental_confidence_tier_threshold_055(self):
+        for tag in ["attire_luxury_premium", "attire_smart_occasion", "attire_lounge_comfort"]:
+            cond = _AUDIENCE_CONDITIONS[tag]
+            field = f"attire_{tag.replace('attire_', '')}_gte"
+            assert cond[field] == pytest.approx(0.55), f"Expected 0.55 for {tag}"
+
+    def test_attire_with_time_tag_generates_rule(self):
+        rules = generate_rules_for_manifest(_manifest("m", ["time_happy_hour", "attire_athletic"]))
+        assert any("attire_athletic" in r["rule_id"] for r in rules)
+        rule = next(r for r in rules if "attire_athletic" in r["rule_id"])
+        assert rule["conditions"]["time_hour_gte"] == 16
+        assert rule["conditions"]["time_hour_lte"] == 18
+        assert "attire_athletic_gte" in rule["conditions"]
+
+    def test_attire_tag_gets_attention_gate(self):
+        from dashboard_api.rule_generator import _ATTENTION_GATE_THRESHOLD
+        rules = generate_rules_for_manifest(_manifest("m", ["attire_formal"]))
+        assert len(rules) == 1
+        assert rules[0]["conditions"]["attention_engaged_gte"] == pytest.approx(_ATTENTION_GATE_THRESHOLD)
+
+
+# ---------------------------------------------------------------------------
+# Cross-dimension rules (CRM-004/005 joint targeting)
+# ---------------------------------------------------------------------------
+
+class TestCrossDimRules:
+    def test_no_cross_dim_for_single_tag(self):
+        """Single audience tag generates no cross-dim rule."""
+        rules = generate_rules_for_manifest(_manifest("m", ["male_focus"]))
+        cross_rules = [r for r in rules if "+" in r["rule_id"]]
+        assert cross_rules == []
+
+    def test_no_cross_dim_for_same_dimension_tags(self):
+        """Two tags in same dimension (both age) generate no cross-dim rule."""
+        rules = generate_rules_for_manifest(_manifest("m", ["solo_adult", "group_adults"]))
+        cross_rules = [r for r in rules if "+" in r["rule_id"]]
+        assert cross_rules == []
+
+    def test_cross_dim_generated_for_age_and_gender(self):
+        """One age tag + one gender tag should produce a cross-dim rule."""
+        rules = generate_rules_for_manifest(_manifest("m", ["solo_adult", "male_focus"]))
+        cross_rules = [r for r in rules if "+" in r["rule_id"]]
+        assert len(cross_rules) == 1
+
+    def test_cross_dim_generated_for_age_and_attire(self):
+        rules = generate_rules_for_manifest(_manifest("m", ["seniors", "attire_formal"]))
+        cross_rules = [r for r in rules if "+" in r["rule_id"]]
+        assert len(cross_rules) == 1
+
+    def test_cross_dim_generated_for_gender_and_attire(self):
+        rules = generate_rules_for_manifest(_manifest("m", ["female_focus", "attire_athletic"]))
+        cross_rules = [r for r in rules if "+" in r["rule_id"]]
+        assert len(cross_rules) == 1
+
+    def test_cross_dim_priority_higher_than_single_dim(self):
+        from dashboard_api.rule_generator import _CROSS_DIM_PRIORITY_BONUS
+        rules = generate_rules_for_manifest(_manifest("m", ["solo_adult", "male_focus"]))
+        single_rules = [r for r in rules if "+" not in r["rule_id"]]
+        cross_rules = [r for r in rules if "+" in r["rule_id"]]
+        assert cross_rules
+        cross_priority = cross_rules[0]["priority"]
+        max_single_priority = max(r["priority"] for r in single_rules)
+        assert cross_priority == max_single_priority + _CROSS_DIM_PRIORITY_BONUS
+
+    def test_cross_dim_merges_conditions(self):
+        """Cross-dim rule should have conditions from both constituent tags."""
+        rules = generate_rules_for_manifest(_manifest("m", ["male_focus", "attire_athletic"]))
+        cross_rules = [r for r in rules if "+" in r["rule_id"]]
+        assert len(cross_rules) == 1
+        cond = cross_rules[0]["conditions"]
+        assert "gender_male_gte" in cond
+        assert "attire_athletic_gte" in cond
+
+    def test_cross_dim_has_attention_gate(self):
+        from dashboard_api.rule_generator import _ATTENTION_GATE_THRESHOLD
+        rules = generate_rules_for_manifest(_manifest("m", ["solo_adult", "attire_formal"]))
+        cross_rules = [r for r in rules if "+" in r["rule_id"]]
+        assert cross_rules
+        assert cross_rules[0]["conditions"]["attention_engaged_gte"] == pytest.approx(_ATTENTION_GATE_THRESHOLD)
+
+    def test_cross_dim_with_time_tag(self):
+        rules = generate_rules_for_manifest(_manifest("m", ["time_happy_hour", "male_focus", "attire_athletic"]))
+        cross_rules = [r for r in rules if "+" in r["rule_id"]]
+        assert len(cross_rules) == 1
+        cond = cross_rules[0]["conditions"]
+        assert cond["time_hour_gte"] == 16
+        assert cond["time_hour_lte"] == 18
+
+    def test_three_cross_dim_tags_generate_three_pairs(self):
+        """age + gender + attire: three different-dimension pairs → 3 cross-dim rules."""
+        rules = generate_rules_for_manifest(_manifest("m", ["solo_adult", "male_focus", "attire_formal"]))
+        cross_rules = [r for r in rules if "+" in r["rule_id"]]
+        assert len(cross_rules) == 3

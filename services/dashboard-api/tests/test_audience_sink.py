@@ -223,3 +223,97 @@ class TestGenderParsing:
         assert snap is not None
         assert snap.gender_male == pytest.approx(1.0)
         assert snap.gender_female is None
+
+
+# ---------------------------------------------------------------------------
+# Attire parsing (CRM-005)
+# ---------------------------------------------------------------------------
+
+_ATTIRE_BINS = [
+    "formal", "business_casual", "casual", "athletic",
+    "outdoor_technical", "workwear_uniform", "streetwear",
+    "luxury_premium", "lounge_comfort", "smart_occasion",
+]
+
+_FULL_ATTIRE = {b: 0.1 for b in _ATTIRE_BINS}
+
+
+def _payload_with_attire(suppressed: bool = False, attire: dict | None = None) -> bytes:
+    demog: dict = {"suppressed": suppressed}
+    if attire is not None:
+        demog["attire"] = attire
+    msg = json.loads(_payload())
+    msg["state"]["demographics"] = demog
+    return json.dumps(msg).encode()
+
+
+class TestAttireParsing:
+    def test_attire_bins_parsed_when_not_suppressed(self):
+        snap = _parse_snapshot(_payload_with_attire(suppressed=False, attire=_FULL_ATTIRE))
+        assert snap is not None
+        assert snap.attire_athletic == pytest.approx(0.1)
+        assert snap.attire_formal == pytest.approx(0.1)
+        assert snap.attire_streetwear == pytest.approx(0.1)
+        assert snap.attire_luxury_premium == pytest.approx(0.1)
+
+    def test_all_ten_attire_bins_parsed(self):
+        snap = _parse_snapshot(_payload_with_attire(suppressed=False, attire=_FULL_ATTIRE))
+        assert snap is not None
+        for col in _ATTIRE_BINS:
+            attr = f"attire_{col}"
+            assert getattr(snap, attr) is not None, f"Expected {attr} to be set"
+
+    def test_attire_absent_writes_none(self):
+        snap = _parse_snapshot(_payload_with_attire(suppressed=False))
+        assert snap is not None
+        assert snap.attire_athletic is None
+        assert snap.attire_formal is None
+
+    def test_attire_suppressed_writes_none(self):
+        snap = _parse_snapshot(_payload_with_attire(suppressed=True, attire=_FULL_ATTIRE))
+        assert snap is not None
+        assert snap.attire_athletic is None
+        assert snap.attire_formal is None
+
+
+# ---------------------------------------------------------------------------
+# Attention parsing (CRM-004)
+# ---------------------------------------------------------------------------
+
+def _payload_with_attention(engaged: float | None = None, ambient: float | None = None) -> bytes:
+    msg = json.loads(_payload())
+    attn: dict = {}
+    if engaged is not None:
+        attn["engaged"] = engaged
+    if ambient is not None:
+        attn["ambient"] = ambient
+    if attn:
+        msg["state"]["attention"] = attn
+    return json.dumps(msg).encode()
+
+
+class TestAttentionParsing:
+    def test_attention_engaged_parsed(self):
+        snap = _parse_snapshot(_payload_with_attention(engaged=0.75))
+        assert snap is not None
+        assert snap.attention_engaged == pytest.approx(0.75)
+
+    def test_attention_absent_writes_none(self):
+        snap = _parse_snapshot(_payload())
+        assert snap is not None
+        assert snap.attention_engaged is None
+
+    def test_attention_no_engaged_key_writes_none(self):
+        snap = _parse_snapshot(_payload_with_attention(ambient=0.2))
+        assert snap is not None
+        assert snap.attention_engaged is None
+
+    def test_attention_not_gated_by_demographics_suppressed(self):
+        """Attention is behavioral — persisted regardless of demographic suppression."""
+        msg = json.loads(_payload())
+        msg["state"]["demographics"] = {"suppressed": True}
+        msg["state"]["attention"] = {"engaged": 0.6}
+        snap = _parse_snapshot(json.dumps(msg).encode())
+        assert snap is not None
+        assert snap.attention_engaged == pytest.approx(0.6)
+        assert snap.demographics_suppressed is True

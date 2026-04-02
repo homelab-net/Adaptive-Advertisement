@@ -281,6 +281,9 @@ class AnalyticsSummaryOut(BaseModel):
     peak_count: Optional[int] = None
     # Demographic distribution: coarse bins only, no individual records
     age_distribution: Optional[dict[str, float]] = None
+    # Average gaze-toward-display probability over the window (CRM-004).
+    # None when head-pose model is not active or no data in window.
+    avg_attention_engaged: Optional[float] = None
     data_available: bool
 
 
@@ -292,6 +295,7 @@ class PlayEventOut(BaseModel):
     activated_at: datetime
     reason: Optional[str] = None
     prev_manifest_id: Optional[str] = None
+    attention_at_trigger: Optional[float] = None
     received_at: datetime
 
 
@@ -308,6 +312,9 @@ class CampaignAnalyticsOut(BaseModel):
     manifest_breakdown: list[dict[str, Any]]  # [{manifest_id, impressions}]
     window_start: Optional[datetime] = None
     window_end: Optional[datetime] = None
+    # Average attention engaged at activation time across all impressions (CRM-004).
+    # None when no play events have attention data.
+    avg_attention_at_trigger: Optional[float] = None
 
 
 class UptimeSummaryOut(BaseModel):
@@ -326,8 +333,9 @@ class UptimeSummaryOut(BaseModel):
 # ---------------------------------------------------------------------------
 
 class DemographicsLiveOut(BaseModel):
-    """Coarse age-bin distribution from the latest CV signal."""
+    """Coarse age-bin and attire distribution from the latest CV signal."""
     age_group: Optional[dict[str, float]] = None
+    attire: Optional[dict[str, float]] = None
     suppressed: bool
 
 

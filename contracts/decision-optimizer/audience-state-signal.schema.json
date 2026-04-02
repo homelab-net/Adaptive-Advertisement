@@ -106,6 +106,15 @@
             }
           }
         },
+        "attention": {
+          "description": "Smoothed gaze-toward-display probability. Behavioral engagement metric — not demographic. Not subject to demographics_suppressed gate. Absent when head-pose model is not active.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "engaged": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "ambient": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+          }
+        },
         "demographics": {
           "description": "Optional smoothed demographic distributions. Must not contain per-person identifiers. All attributes are probabilistic aggregates only. Suppressed when confidence is below gating threshold.",
           "type": "object",
@@ -129,6 +138,23 @@
               "properties": {
                 "male":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                 "female": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+              }
+            },
+            "attire": {
+              "description": "Smoothed clothing-category distribution. Visual-appearance-based probabilities. Aggregate probabilistic bins only — not identity or biometric data. Absent when attire CV model is not active.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "formal":            { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "business_casual":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "casual":            { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "athletic":          { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "outdoor_technical": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "workwear_uniform":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "streetwear":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "luxury_premium":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "lounge_comfort":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "smart_occasion":    { "type": "number", "minimum": 0.0, "maximum": 1.0 }
               }
             },
             "dwell_estimate_ms": {

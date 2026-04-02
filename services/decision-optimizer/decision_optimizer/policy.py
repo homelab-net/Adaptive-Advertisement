@@ -36,18 +36,36 @@ presence_count_gte           int   — presence.count >= value
 presence_count_lte           int   — presence.count <= value
 presence_count_eq            int   — presence.count == value
 presence_confidence_gte      float — presence.confidence >= value
-age_group_child_gte          float — demographics.age_groups.child >= value
-age_group_young_adult_gte    float — demographics.age_groups.young_adult >= value
-age_group_adult_gte          float — demographics.age_groups.adult >= value
-age_group_senior_gte         float — demographics.age_groups.senior >= value
+age_group_child_gte          float — demographics.age_group.child >= value
+age_group_young_adult_gte    float — demographics.age_group.young_adult >= value
+age_group_adult_gte          float — demographics.age_group.adult >= value
+age_group_senior_gte         float — demographics.age_group.senior >= value
 gender_male_gte              float — demographics.gender.male >= value
 gender_female_gte            float — demographics.gender.female >= value
+attire_formal_gte            float — demographics.attire.formal >= value
+attire_business_casual_gte   float — demographics.attire.business_casual >= value
+attire_casual_gte            float — demographics.attire.casual >= value
+attire_athletic_gte          float — demographics.attire.athletic >= value
+attire_outdoor_technical_gte float — demographics.attire.outdoor_technical >= value
+attire_workwear_uniform_gte  float — demographics.attire.workwear_uniform >= value
+attire_streetwear_gte        float — demographics.attire.streetwear >= value
+attire_luxury_premium_gte    float — demographics.attire.luxury_premium >= value
+attire_lounge_comfort_gte    float — demographics.attire.lounge_comfort >= value
+attire_smart_occasion_gte    float — demographics.attire.smart_occasion >= value
 demographics_suppressed_eq   bool  — state.stability.demographics_suppressed == value
+attention_engaged_gte        float — state.attention.engaged >= value
+                                     (absent attention block passes silently)
 time_hour_gte                int   — UTC hour >= value (0-23)
 time_hour_lte                int   — UTC hour <= value (0-23)
 
 Demographic conditions: if demographics_suppressed is True in the signal
 and any demographic condition is set, the rule does NOT match (privacy guard).
+Attire conditions are subject to the same demographics_suppressed gate.
+
+Attention condition: evaluated independently of demographics_suppressed.
+If the signal contains no attention block the gate passes silently (backward
+compatible). If the attention block is present and engaged < threshold the
+rule does NOT match.
 
 An empty conditions dict {} always matches (catch-all / default rule).
 Rules are tried in descending priority order; the first match wins.
@@ -65,6 +83,10 @@ log = logging.getLogger(__name__)
 
 _POLICY_SCHEMA_VERSION = "1.0.0"
 
+_ATTENTION_CONDITION_FIELDS = (
+    "attention_engaged_gte",
+)
+
 _DEMOGRAPHIC_CONDITION_FIELDS = (
     "age_group_child_gte",
     "age_group_young_adult_gte",
@@ -72,6 +94,16 @@ _DEMOGRAPHIC_CONDITION_FIELDS = (
     "age_group_senior_gte",
     "gender_male_gte",
     "gender_female_gte",
+    "attire_formal_gte",
+    "attire_business_casual_gte",
+    "attire_casual_gte",
+    "attire_athletic_gte",
+    "attire_outdoor_technical_gte",
+    "attire_workwear_uniform_gte",
+    "attire_streetwear_gte",
+    "attire_luxury_premium_gte",
+    "attire_lounge_comfort_gte",
+    "attire_smart_occasion_gte",
 )
 
 
@@ -97,7 +129,19 @@ class Rule:
     age_group_senior_gte: Optional[float] = None
     gender_male_gte: Optional[float] = None
     gender_female_gte: Optional[float] = None
+    attire_formal_gte: Optional[float] = None
+    attire_business_casual_gte: Optional[float] = None
+    attire_casual_gte: Optional[float] = None
+    attire_athletic_gte: Optional[float] = None
+    attire_outdoor_technical_gte: Optional[float] = None
+    attire_workwear_uniform_gte: Optional[float] = None
+    attire_streetwear_gte: Optional[float] = None
+    attire_luxury_premium_gte: Optional[float] = None
+    attire_lounge_comfort_gte: Optional[float] = None
+    attire_smart_occasion_gte: Optional[float] = None
     demographics_suppressed_eq: Optional[bool] = None
+    # Attention condition (behavioral — not gated by demographics_suppressed)
+    attention_engaged_gte: Optional[float] = None
     # Time-of-day conditions (UTC hour, inclusive bounds)
     time_hour_gte: Optional[int] = None
     time_hour_lte: Optional[int] = None
@@ -131,12 +175,17 @@ class Rule:
         if self.presence_confidence_gte is not None and confidence < self.presence_confidence_gte:
             return False
 
+        # --- Attention condition (behavioral; absent → silent pass) ---
+        if self.attention_engaged_gte is not None:
+            attn_block = signal.get("state", {}).get("attention")
+            if attn_block is not None:
+                engaged = attn_block.get("engaged")
+                if engaged is not None and float(engaged) < self.attention_engaged_gte:
+                    return False
+
         # --- demographics_suppressed_eq condition ---
-        suppressed: bool = bool(
-            signal.get("state", {})
-            .get("stability", {})
-            .get("demographics_suppressed", True)
-        )
+        demographics_block: dict = signal.get("state", {}).get("demographics", {}) or {}
+        suppressed: bool = bool(demographics_block.get("suppressed", True))
         if self.demographics_suppressed_eq is not None:
             if suppressed != self.demographics_suppressed_eq:
                 return False
@@ -146,34 +195,58 @@ class Rule:
             # Privacy guard: if suppressed, demographic conditions cannot be evaluated
             if suppressed:
                 return False
-            age_groups: dict = (
-                signal.get("state", {})
-                .get("demographics", {})
-                .get("age_groups", {})
-            )
+            age_group: dict = demographics_block.get("age_group", {})
             if self.age_group_child_gte is not None:
-                if float(age_groups.get("child", 0.0)) < self.age_group_child_gte:
+                if float(age_group.get("child", 0.0)) < self.age_group_child_gte:
                     return False
             if self.age_group_young_adult_gte is not None:
-                if float(age_groups.get("young_adult", 0.0)) < self.age_group_young_adult_gte:
+                if float(age_group.get("young_adult", 0.0)) < self.age_group_young_adult_gte:
                     return False
             if self.age_group_adult_gte is not None:
-                if float(age_groups.get("adult", 0.0)) < self.age_group_adult_gte:
+                if float(age_group.get("adult", 0.0)) < self.age_group_adult_gte:
                     return False
             if self.age_group_senior_gte is not None:
-                if float(age_groups.get("senior", 0.0)) < self.age_group_senior_gte:
+                if float(age_group.get("senior", 0.0)) < self.age_group_senior_gte:
                     return False
 
-            gender: dict = (
-                signal.get("state", {})
-                .get("demographics", {})
-                .get("gender", {})
-            )
+            gender: dict = demographics_block.get("gender", {})
             if self.gender_male_gte is not None:
                 if float(gender.get("male", 0.0)) < self.gender_male_gte:
                     return False
             if self.gender_female_gte is not None:
                 if float(gender.get("female", 0.0)) < self.gender_female_gte:
+                    return False
+
+            attire: dict = demographics_block.get("attire", {})
+            if self.attire_formal_gte is not None:
+                if float(attire.get("formal", 0.0)) < self.attire_formal_gte:
+                    return False
+            if self.attire_business_casual_gte is not None:
+                if float(attire.get("business_casual", 0.0)) < self.attire_business_casual_gte:
+                    return False
+            if self.attire_casual_gte is not None:
+                if float(attire.get("casual", 0.0)) < self.attire_casual_gte:
+                    return False
+            if self.attire_athletic_gte is not None:
+                if float(attire.get("athletic", 0.0)) < self.attire_athletic_gte:
+                    return False
+            if self.attire_outdoor_technical_gte is not None:
+                if float(attire.get("outdoor_technical", 0.0)) < self.attire_outdoor_technical_gte:
+                    return False
+            if self.attire_workwear_uniform_gte is not None:
+                if float(attire.get("workwear_uniform", 0.0)) < self.attire_workwear_uniform_gte:
+                    return False
+            if self.attire_streetwear_gte is not None:
+                if float(attire.get("streetwear", 0.0)) < self.attire_streetwear_gte:
+                    return False
+            if self.attire_luxury_premium_gte is not None:
+                if float(attire.get("luxury_premium", 0.0)) < self.attire_luxury_premium_gte:
+                    return False
+            if self.attire_lounge_comfort_gte is not None:
+                if float(attire.get("lounge_comfort", 0.0)) < self.attire_lounge_comfort_gte:
+                    return False
+            if self.attire_smart_occasion_gte is not None:
+                if float(attire.get("smart_occasion", 0.0)) < self.attire_smart_occasion_gte:
                     return False
 
         # --- Time-of-day conditions ---
@@ -305,7 +378,18 @@ def load_policy(rules_file: str) -> PolicyEngine:
             age_group_senior_gte=cond.get("age_group_senior_gte"),
             gender_male_gte=cond.get("gender_male_gte"),
             gender_female_gte=cond.get("gender_female_gte"),
+            attire_formal_gte=cond.get("attire_formal_gte"),
+            attire_business_casual_gte=cond.get("attire_business_casual_gte"),
+            attire_casual_gte=cond.get("attire_casual_gte"),
+            attire_athletic_gte=cond.get("attire_athletic_gte"),
+            attire_outdoor_technical_gte=cond.get("attire_outdoor_technical_gte"),
+            attire_workwear_uniform_gte=cond.get("attire_workwear_uniform_gte"),
+            attire_streetwear_gte=cond.get("attire_streetwear_gte"),
+            attire_luxury_premium_gte=cond.get("attire_luxury_premium_gte"),
+            attire_lounge_comfort_gte=cond.get("attire_lounge_comfort_gte"),
+            attire_smart_occasion_gte=cond.get("attire_smart_occasion_gte"),
             demographics_suppressed_eq=cond.get("demographics_suppressed_eq"),
+            attention_engaged_gte=cond.get("attention_engaged_gte"),
             time_hour_gte=cond.get("time_hour_gte"),
             time_hour_lte=cond.get("time_hour_lte"),
         ))

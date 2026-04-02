@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import BANNED_METADATA_KEYS, CvObservation, ObservationCounts, ObservationDemographics
+from .models import BANNED_METADATA_KEYS, CvObservation, ObservationAttention, ObservationCounts, ObservationDemographics
 
 
 class PrivacyViolationError(RuntimeError):
@@ -85,8 +85,17 @@ def build_observation(raw_meta: dict, context: ObservationContext) -> CvObservat
         demographics = ObservationDemographics(
             age_group=raw_demog.get("age_group"),
             gender=raw_demog.get("gender"),
+            attire=raw_demog.get("attire"),
             dwell_estimate_ms=raw_demog.get("dwell_estimate_ms"),
             suppressed=raw_demog.get("suppressed"),
+        )
+
+    attention: ObservationAttention | None = None
+    if "attention" in raw_meta:
+        raw_attn = raw_meta["attention"]
+        attention = ObservationAttention(
+            engaged=raw_attn.get("engaged"),
+            ambient=raw_attn.get("ambient"),
         )
 
     return CvObservation(
@@ -97,5 +106,6 @@ def build_observation(raw_meta: dict, context: ObservationContext) -> CvObservat
         frame_seq=int(raw_meta.get("frame_seq", 0)),
         counts=counts,
         demographics=demographics,
+        attention=attention,
         quality=quality,
     )

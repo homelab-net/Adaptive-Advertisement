@@ -287,6 +287,19 @@ class AudienceSnapshot(Base):
     # Coarse gender bins — NULL when demographics_suppressed=True or pipeline lacks gender
     gender_male: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     gender_female: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    # Coarse attire bins — NULL when demographics_suppressed=True or pipeline lacks attire
+    attire_formal: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    attire_business_casual: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    attire_casual: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    attire_athletic: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    attire_outdoor_technical: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    attire_workwear_uniform: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    attire_streetwear: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    attire_luxury_premium: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    attire_lounge_comfort: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    attire_smart_occasion: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    # Smoothed gaze-toward-display probability — NULL when head-pose model inactive
+    attention_engaged: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
 
     def __repr__(self) -> str:
         return f"<AudienceSnapshot count={self.presence_count} @ {self.sampled_at}>"
@@ -311,6 +324,9 @@ class PlayEvent(Base):
     )
     reason: Mapped[str | None] = mapped_column(sa.String(256), nullable=True)
     prev_manifest_id: Mapped[str | None] = mapped_column(sa.String(128), nullable=True)
+    # Attention engaged value from nearest AudienceSnapshot at activation time.
+    # NULL when no snapshot is available within the lookup window.
+    attention_at_trigger: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     received_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False, default=_now,
         server_default=func.now(),

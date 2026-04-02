@@ -1,7 +1,7 @@
 """add gender demographics columns
 
-Revision ID: 0003
-Revises: 0002
+Revision ID: 0004
+Revises: 0003
 Create Date: 2026-04-01
 
 Adds coarse gender bin columns to audience_snapshots (CRM-003).
@@ -11,8 +11,8 @@ upstream pipeline does not provide gender estimates.
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0003"
-down_revision = "0002"
+revision = "0004"
+down_revision = "0003"
 branch_labels = None
 depends_on = None
 

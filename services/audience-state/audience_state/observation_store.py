@@ -176,6 +176,27 @@ class ObservationWindow:
             if genders:
                 smoothed_genders = genders
 
+        # Average attire distributions (optional — only if ALL obs carry attire)
+        attire_bins = [
+            "formal", "business_casual", "casual", "athletic",
+            "outdoor_technical", "workwear_uniform", "streetwear",
+            "luxury_premium", "lounge_comfort", "smart_occasion",
+        ]
+        smoothed_attire: dict[str, float] | None = None
+        if all(o.data["demographics"].get("attire") is not None for o in obs_with_demog):
+            attire: dict[str, float] = {}
+            for bin_name in attire_bins:
+                values = [
+                    o.data["demographics"]["attire"].get(bin_name)
+                    for o in obs_with_demog
+                ]
+                if any(v is None for v in values):
+                    attire = {}
+                    break
+                attire[bin_name] = round(sum(values) / len(values), 4)  # type: ignore[arg-type]
+            if attire:
+                smoothed_attire = attire
+
         # Use the latest dwell estimate
         latest_dwell = obs_with_demog[-1].data["demographics"].get("dwell_estimate_ms")
 
@@ -185,9 +206,41 @@ class ObservationWindow:
         }
         if smoothed_genders is not None:
             result["gender"] = smoothed_genders
+        if smoothed_attire is not None:
+            result["attire"] = smoothed_attire
         if latest_dwell is not None:
             result["dwell_estimate_ms"] = latest_dwell
         return result
+
+    def compute_attention(self) -> Optional[dict]:
+        """
+        Return a smoothed attention block, or None if no observations in the
+        window carry attention data.
+
+        Averages engaged/ambient across all observations that include an
+        attention block. Behavioral metric — not gated by demographics_suppressed.
+        """
+        self._prune()
+        if not self._observations:
+            return None
+
+        obs_with_attn = [
+            o for o in self._observations if o.data.get("attention") is not None
+        ]
+        if not obs_with_attn:
+            return None
+
+        result: dict = {}
+        for field in ("engaged", "ambient"):
+            values = [
+                o.data["attention"].get(field)
+                for o in obs_with_attn
+            ]
+            present = [v for v in values if v is not None]
+            if present:
+                result[field] = round(sum(present) / len(present), 4)
+
+        return result if result else None
 
     def newest_observation_age_ms(self) -> Optional[int]:
         """

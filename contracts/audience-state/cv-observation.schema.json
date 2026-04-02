@@ -121,6 +121,23 @@
             "female": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
           }
         },
+        "attire": {
+          "description": "Coarse clothing-category distribution over the observation window. Values are visual-appearance-based probabilities. Not identity or biometric data — aggregate probabilistic bins only. Absent when attire CV model is not active. casual is strictly defined as clearly identifiable casual wear — not a catch-all.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "formal":            { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "business_casual":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "casual":            { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "athletic":          { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "outdoor_technical": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "workwear_uniform":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "streetwear":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "luxury_premium":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "lounge_comfort":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "smart_occasion":    { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+          }
+        },
         "dwell_estimate_ms": {
           "description": "Estimated average dwell time for persons present during the window, in milliseconds.",
           "type": "integer",
@@ -130,6 +147,15 @@
           "description": "True if optional demographic attributes were suppressed due to low confidence gating.",
           "type": "boolean"
         }
+      }
+    },
+    "attention": {
+      "description": "Gaze-toward-display probability over the observation window. Derived from head-pose estimation. Behavioral engagement metric — not demographic data. Not subject to demographics_suppressed gate. Absent when attention_camera_angle_validated=false or head-pose model is not active.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "engaged": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "ambient": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
       }
     },
     "quality": {

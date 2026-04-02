@@ -14,6 +14,26 @@ Frequency tags  — HOW OFTEN to show it outside its primary time window
 Generated rule format matches the rules file schema consumed by load_policy()
 in services/decision-optimizer/decision_optimizer/policy.py.
 
+Attention gate (CRM-004)
+------------------------
+attention_engaged_gte is auto-injected by this module into all demographic
+audience tag conditions (i.e. all tags except "attract" and "general").
+It is NOT an operator-selectable tag — operators cannot add or remove it.
+The gate threshold is fixed at _ATTENTION_GATE_THRESHOLD = 0.35.
+
+When the ICD-3 signal contains no attention block, the gate passes silently
+(backward compatible with pipelines that lack a head-pose model). When present,
+the rule only fires if engaged >= threshold, ensuring targeted ads only activate
+when a person is actually looking at the display.
+
+Cross-dimension targeting (CRM-004/005)
+-----------------------------------------
+When a manifest carries tags from two different demographic dimensions
+(age, gender, attire), an additional cross-dimension rule is generated at
+priority 13 (no time) or 33 (with time) for each pair. This rewards manifests
+that correctly target a specific audience slice with a priority bump over
+single-dimension rules.
+
 Privacy
 -------
 No live demographic data is stored here.  Tags are operator-assigned intent
@@ -23,6 +43,7 @@ policy engine's existing privacy guard allows
 """
 from __future__ import annotations
 
+import itertools
 import logging
 from typing import Any
 
@@ -42,6 +63,17 @@ AUDIENCE_TAGS: set[str] = {
     "seniors",
     "male_focus",
     "female_focus",
+    # Attire tags (CRM-005)
+    "attire_formal",
+    "attire_business_casual",
+    "attire_casual",
+    "attire_athletic",
+    "attire_outdoor_technical",
+    "attire_workwear_uniform",
+    "attire_streetwear",
+    "attire_luxury_premium",
+    "attire_lounge_comfort",
+    "attire_smart_occasion",
 }
 
 TIME_TAGS: set[str] = {
@@ -69,10 +101,55 @@ FREQUENCY_TAGS: set[str] = {
 ALL_VALID_TAGS: set[str] = AUDIENCE_TAGS | TIME_TAGS | OCCASION_TAGS | FREQUENCY_TAGS
 
 # ---------------------------------------------------------------------------
+# Attention gate — auto-injected into all demographic audience tag conditions
+# ---------------------------------------------------------------------------
+
+# Fixed gate threshold. Auto-injected into all audience conditions except
+# "attract" and "general". Not operator-configurable.
+_ATTENTION_GATE_THRESHOLD: float = 0.35
+
+# Tags that do NOT receive the attention gate injection.
+_ATTENTION_GATE_EXCLUDED: frozenset[str] = frozenset({"attract", "general"})
+
+# ---------------------------------------------------------------------------
+# Dimension groups for cross-dimension rule generation
+# ---------------------------------------------------------------------------
+
+# Maps each audience tag to the demographic dimension it belongs to.
+# Tags not listed here (attract, general) are dimensionless.
+_DIMENSION_GROUPS: dict[str, str] = {
+    # Age dimension
+    "solo_adult": "age",
+    "group_adults": "age",
+    "adult_with_child": "age",
+    "teenager_group": "age",
+    "seniors": "age",
+    # Gender dimension
+    "male_focus": "gender",
+    "female_focus": "gender",
+    # Attire dimension
+    "attire_formal": "attire",
+    "attire_business_casual": "attire",
+    "attire_casual": "attire",
+    "attire_athletic": "attire",
+    "attire_outdoor_technical": "attire",
+    "attire_workwear_uniform": "attire",
+    "attire_streetwear": "attire",
+    "attire_luxury_premium": "attire",
+    "attire_lounge_comfort": "attire",
+    "attire_smart_occasion": "attire",
+}
+
+# Priority bonus for cross-dimension (multi-dimensional) rules
+_CROSS_DIM_PRIORITY_BONUS: int = 3
+
+# ---------------------------------------------------------------------------
 # Tag → conditions mapping (audience tags)
 # ---------------------------------------------------------------------------
 
 # Conditions use the exact field names from policy.py Rule dataclass.
+# Note: attention_engaged_gte is injected at rule-generation time for
+# all tags NOT in _ATTENTION_GATE_EXCLUDED — do not set it here.
 _AUDIENCE_CONDITIONS: dict[str, dict[str, Any]] = {
     "attract": {},
     "general": {
@@ -115,6 +192,60 @@ _AUDIENCE_CONDITIONS: dict[str, dict[str, Any]] = {
         "presence_confidence_gte": 0.6,
         "gender_female_gte": 0.55,
     },
+    # Attire tags (CRM-005) — tiered CV confidence thresholds
+    # High confidence tier (0.45): visually distinctive categories
+    "attire_formal": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.6,
+        "attire_formal_gte": 0.45,
+    },
+    "attire_athletic": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.6,
+        "attire_athletic_gte": 0.45,
+    },
+    "attire_outdoor_technical": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.6,
+        "attire_outdoor_technical_gte": 0.45,
+    },
+    "attire_workwear_uniform": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.6,
+        "attire_workwear_uniform_gte": 0.45,
+    },
+    # Moderate confidence tier (0.50)
+    "attire_business_casual": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.6,
+        "attire_business_casual_gte": 0.50,
+    },
+    "attire_streetwear": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.6,
+        "attire_streetwear_gte": 0.50,
+    },
+    "attire_casual": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.6,
+        "attire_casual_gte": 0.50,
+    },
+    # Experimental confidence tier (0.55): harder to classify reliably
+    "attire_luxury_premium": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.6,
+        "attire_luxury_premium_gte": 0.55,
+    },
+    "attire_smart_occasion": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.6,
+        "attire_smart_occasion_gte": 0.55,
+    },
+    "attire_lounge_comfort": {
+        "presence_count_gte": 1,
+        "presence_confidence_gte": 0.6,
+        "attire_lounge_comfort_gte": 0.55,
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -139,15 +270,26 @@ _TIME_WINDOWS: dict[str, tuple[int, int] | list[tuple[int, int]] | None] = {
 # ---------------------------------------------------------------------------
 
 _AUDIENCE_BASE_PRIORITY: dict[str, int] = {
-    "attract":         0,
-    "general":         5,
-    "solo_adult":      10,
-    "group_adults":    10,
-    "adult_with_child": 10,
-    "teenager_group":  10,
-    "seniors":         10,
-    "male_focus":      10,
-    "female_focus":    10,
+    "attract":               0,
+    "general":               5,
+    "solo_adult":           10,
+    "group_adults":         10,
+    "adult_with_child":     10,
+    "teenager_group":       10,
+    "seniors":              10,
+    "male_focus":           10,
+    "female_focus":         10,
+    # Attire tags — same base as single-dimension demographic tags
+    "attire_formal":             10,
+    "attire_business_casual":    10,
+    "attire_casual":             10,
+    "attire_athletic":           10,
+    "attire_outdoor_technical":  10,
+    "attire_workwear_uniform":   10,
+    "attire_streetwear":         10,
+    "attire_luxury_premium":     10,
+    "attire_lounge_comfort":     10,
+    "attire_smart_occasion":     10,
 }
 
 # Priority boosts applied when time tags are also present
@@ -177,6 +319,38 @@ _FREQ_REMINDER: dict[str, dict[str, Any]] = {
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _inject_attention_gate(cond: dict[str, Any], tag: str) -> dict[str, Any]:
+    """
+    Return a copy of cond with attention_engaged_gte injected if the tag
+    is not in _ATTENTION_GATE_EXCLUDED.
+    """
+    if tag in _ATTENTION_GATE_EXCLUDED:
+        return cond
+    return {**cond, "attention_engaged_gte": _ATTENTION_GATE_THRESHOLD}
+
+
+def _merge_conditions(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    """
+    Merge two condition dicts. For numeric thresholds that appear in both,
+    take the maximum (more restrictive). For presence_count_eq, prefer the
+    stricter of the two (keep the value that constrains more: use as-is since
+    same-dimension pairs would conflict; in practice pairs come from different
+    dimensions so overlaps are only on presence/confidence fields).
+    """
+    merged = dict(a)
+    for key, val in b.items():
+        if key not in merged:
+            merged[key] = val
+        elif isinstance(val, (int, float)) and isinstance(merged[key], (int, float)):
+            merged[key] = max(merged[key], val)
+        # Non-numeric duplicates: keep existing (a wins)
+    return merged
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -187,6 +361,8 @@ def generate_rules_for_manifest(manifest: Any) -> list[dict[str, Any]]:
     Rules include:
     - One rule per (time_tag × audience_tag) combination (or per audience tag if no
       time tags), ordered and prioritised according to the tag taxonomy.
+    - Cross-dimension pair rules at priority 13 (no time) or 33 (with time) for each
+      pair of tags from different demographic dimensions.
     - One additional reminder rule if freq_recurring or freq_ambient is set.
 
     Returns [] if the manifest has no tags or if all tags are unknown.
@@ -224,6 +400,7 @@ def generate_rules_for_manifest(manifest: Any) -> list[dict[str, Any]]:
                 if audience:
                     for aud_tag in audience:
                         cond = dict(_AUDIENCE_CONDITIONS.get(aud_tag, {}))
+                        cond = _inject_attention_gate(cond, aud_tag)
                         if slot is not None:
                             cond["time_hour_gte"] = slot[0]
                             cond["time_hour_lte"] = slot[1]
@@ -237,6 +414,17 @@ def generate_rules_for_manifest(manifest: Any) -> list[dict[str, Any]]:
                             "manifest_id": manifest_id,
                             "conditions": cond,
                         })
+
+                    # Cross-dimension pair rules for this time slot
+                    cross_rules = _generate_cross_dim_rules(
+                        manifest_id=manifest_id,
+                        audience_tags=audience,
+                        slot=slot,
+                        slot_idx=slot_idx,
+                        time_tag=time_tag,
+                        occasion_bonus=occasion_bonus,
+                    )
+                    rules.extend(cross_rules)
                 else:
                     # No audience tag: simple time window + basic presence
                     cond = {"presence_count_gte": 1, "presence_confidence_gte": 0.6}
@@ -256,6 +444,7 @@ def generate_rules_for_manifest(manifest: Any) -> list[dict[str, Any]]:
         # No time tags — generate one rule per audience tag, no time restriction.
         for aud_tag in audience:
             cond = dict(_AUDIENCE_CONDITIONS.get(aud_tag, {}))
+            cond = _inject_attention_gate(cond, aud_tag)
             base_pri = _AUDIENCE_BASE_PRIORITY.get(aud_tag, 10)
             priority = base_pri + occasion_bonus
             rules.append({
@@ -265,6 +454,17 @@ def generate_rules_for_manifest(manifest: Any) -> list[dict[str, Any]]:
                 "manifest_id": manifest_id,
                 "conditions": cond,
             })
+
+        # Cross-dimension pair rules (no time)
+        cross_rules = _generate_cross_dim_rules(
+            manifest_id=manifest_id,
+            audience_tags=audience,
+            slot=None,
+            slot_idx=0,
+            time_tag=None,
+            occasion_bonus=occasion_bonus,
+        )
+        rules.extend(cross_rules)
 
     # Frequency: add reminder rule for recurring/ambient
     reminder_cfg = _FREQ_REMINDER.get(freq)
@@ -280,6 +480,61 @@ def generate_rules_for_manifest(manifest: Any) -> list[dict[str, Any]]:
         })
 
     return rules
+
+
+def _generate_cross_dim_rules(
+    manifest_id: str,
+    audience_tags: list[str],
+    slot: tuple[int, int] | None,
+    slot_idx: int,
+    time_tag: str | None,
+    occasion_bonus: int,
+) -> list[dict[str, Any]]:
+    """
+    Generate cross-dimension pair rules for all pairs of audience tags that
+    come from different demographic dimensions.
+
+    Priority = base (10) + _CROSS_DIM_PRIORITY_BONUS (3) + time boost (if time_tag) + occasion_bonus
+    """
+    cross_rules: list[dict[str, Any]] = []
+
+    # Collect only dimensioned tags (exclude attract, general)
+    dimensioned = [(t, _DIMENSION_GROUPS[t]) for t in audience_tags if t in _DIMENSION_GROUPS]
+
+    for (tag_a, dim_a), (tag_b, dim_b) in itertools.combinations(dimensioned, 2):
+        if dim_a == dim_b:
+            continue  # same dimension — skip
+
+        cond_a = dict(_AUDIENCE_CONDITIONS.get(tag_a, {}))
+        cond_b = dict(_AUDIENCE_CONDITIONS.get(tag_b, {}))
+        merged = _merge_conditions(cond_a, cond_b)
+
+        # Inject attention gate on the merged condition (both tags are non-excluded)
+        merged["attention_engaged_gte"] = _ATTENTION_GATE_THRESHOLD
+
+        if slot is not None:
+            merged["time_hour_gte"] = slot[0]
+            merged["time_hour_lte"] = slot[1]
+
+        base_pri = 10 + _CROSS_DIM_PRIORITY_BONUS
+        if time_tag is not None:
+            priority = base_pri + _TIME_AUDIENCE_PRIORITY_BOOST + occasion_bonus
+        else:
+            priority = base_pri + occasion_bonus
+
+        slot_suffix = f"-s{slot_idx}" if slot_idx > 0 else ""
+        time_part = f"-{time_tag}{slot_suffix}" if time_tag else ""
+        rule_id = f"autogen-{manifest_id}{time_part}-{tag_a}+{tag_b}"
+
+        cross_rules.append({
+            "rule_id": rule_id,
+            "priority": priority,
+            "weight": 1.0,
+            "manifest_id": manifest_id,
+            "conditions": merged,
+        })
+
+    return cross_rules
 
 
 def build_rules_file(

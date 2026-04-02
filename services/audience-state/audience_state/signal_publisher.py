@@ -104,6 +104,11 @@ class SignalPublisher:
         if demog is not None:
             signal["state"]["demographics"] = demog
 
+        # Include attention if available (behavioral metric — not demographic)
+        attn = window.compute_attention()
+        if attn is not None:
+            signal["state"]["attention"] = attn
+
         # Self-validate before returning
         errors = list(self._validator.iter_errors(signal))
         if errors:

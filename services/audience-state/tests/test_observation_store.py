@@ -315,3 +315,138 @@ class TestGenderSmoothing:
         assert d is not None
         assert d["suppressed"] is False
         assert "gender" not in d
+
+
+# ---------------------------------------------------------------------------
+# Attire smoothing (CRM-005)
+# ---------------------------------------------------------------------------
+
+_ATTIRE_BINS = [
+    "formal", "business_casual", "casual", "athletic",
+    "outdoor_technical", "workwear_uniform", "streetwear",
+    "luxury_premium", "lounge_comfort", "smart_occasion",
+]
+
+
+class TestAttireSmoothing:
+    def _base_demog(self) -> dict:
+        return {
+            "age_group": {"child": 0.0, "young_adult": 0.3, "adult": 0.5, "senior": 0.2},
+        }
+
+    def _attire_dict(self, value: float = 0.5) -> dict:
+        return {b: value for b in _ATTIRE_BINS}
+
+    def _demog_with_attire(self, value: float = 0.5) -> dict:
+        d = self._base_demog()
+        d["attire"] = self._attire_dict(value)
+        return d
+
+    def test_attire_smoothed_when_all_obs_have_it(self):
+        w = make_window(min_stability=1, conf_threshold=0.5)
+        w.add(make_observation(confidence=0.9, message_id="a",
+                               demographics=self._demog_with_attire(0.6)))
+        w.add(make_observation(confidence=0.9, message_id="b",
+                               demographics=self._demog_with_attire(0.4)))
+        d = w.compute_demographics()
+        assert d is not None
+        assert d["suppressed"] is False
+        assert "attire" in d
+        assert d["attire"]["athletic"] == pytest.approx(0.5, abs=1e-3)
+
+    def test_attire_omitted_when_no_obs_have_it(self):
+        w = make_window(min_stability=1, conf_threshold=0.5)
+        w.add(make_observation(confidence=0.9, message_id="a",
+                               demographics=self._base_demog()))
+        w.add(make_observation(confidence=0.9, message_id="b",
+                               demographics=self._base_demog()))
+        d = w.compute_demographics()
+        assert d is not None
+        assert d["suppressed"] is False
+        assert "attire" not in d
+
+    def test_attire_omitted_when_only_partial_obs_have_it(self):
+        w = make_window(min_stability=1, conf_threshold=0.5)
+        w.add(make_observation(confidence=0.9, message_id="a",
+                               demographics=self._demog_with_attire()))
+        w.add(make_observation(confidence=0.9, message_id="b",
+                               demographics=self._base_demog()))
+        d = w.compute_demographics()
+        assert d is not None
+        assert d["suppressed"] is False
+        assert "attire" not in d
+
+    def test_all_ten_attire_bins_present(self):
+        w = make_window(min_stability=1, conf_threshold=0.5)
+        w.add(make_observation(confidence=0.9, demographics=self._demog_with_attire(0.1)))
+        d = w.compute_demographics()
+        assert d is not None
+        assert "attire" in d
+        for bin_name in _ATTIRE_BINS:
+            assert bin_name in d["attire"]
+
+
+# ---------------------------------------------------------------------------
+# Attention smoothing (CRM-004)
+# ---------------------------------------------------------------------------
+
+class TestAttentionSmoothing:
+    def test_attention_absent_returns_none(self):
+        w = make_window(min_stability=1)
+        w.add(make_observation())  # no attention
+        assert w.compute_attention() is None
+
+    def test_empty_window_returns_none(self):
+        w = make_window()
+        assert w.compute_attention() is None
+
+    def test_single_obs_with_attention_returns_value(self):
+        w = make_window(min_stability=1)
+        w.add(make_observation(attention={"engaged": 0.6, "ambient": 0.4}))
+        attn = w.compute_attention()
+        assert attn is not None
+        assert attn["engaged"] == pytest.approx(0.6)
+        assert attn["ambient"] == pytest.approx(0.4)
+
+    def test_attention_averaged_across_obs(self):
+        w = make_window(min_stability=1)
+        w.add(make_observation(message_id="a", attention={"engaged": 0.8}))
+        w.add(make_observation(message_id="b", attention={"engaged": 0.6}))
+        attn = w.compute_attention()
+        assert attn is not None
+        assert attn["engaged"] == pytest.approx(0.7, abs=1e-3)
+
+    def test_attention_partial_obs_averages_only_present(self):
+        """If only some obs have attention, average only those that do."""
+        w = make_window(min_stability=1)
+        w.add(make_observation(message_id="a", attention={"engaged": 0.8}))
+        w.add(make_observation(message_id="b"))  # no attention
+        attn = w.compute_attention()
+        assert attn is not None
+        assert attn["engaged"] == pytest.approx(0.8)
+
+    def test_attention_engaged_only_no_ambient(self):
+        w = make_window(min_stability=1)
+        w.add(make_observation(attention={"engaged": 0.5}))
+        attn = w.compute_attention()
+        assert attn is not None
+        assert "engaged" in attn
+        assert "ambient" not in attn
+
+    def test_attention_independent_of_demographics_suppressed(self):
+        """Attention is a behavioral metric — not gated by demographic suppression."""
+        age = {"child": 0.0, "young_adult": 0.3, "adult": 0.5, "senior": 0.2}
+        # Low confidence forces demographics to be suppressed
+        w = make_window(min_stability=1, conf_threshold=0.9)
+        w.add(make_observation(
+            confidence=0.3,
+            demographics={"age_group": age},
+            attention={"engaged": 0.7},
+        ))
+        # Demographics should be suppressed due to low confidence
+        d = w.compute_demographics()
+        assert d is not None and d["suppressed"] is True
+        # Attention should still be returned regardless of demographic suppression
+        attn = w.compute_attention()
+        assert attn is not None
+        assert attn["engaged"] == pytest.approx(0.7)

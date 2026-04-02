@@ -12,6 +12,7 @@ def make_observation(
     message_id: str = "obs-1",
     window_ms: int = 500,
     demographics: dict | None = None,
+    attention: dict | None = None,
 ) -> dict:
     """Build a minimal valid ICD-2 cv-observation dict."""
     obs: dict = {
@@ -39,6 +40,8 @@ def make_observation(
     }
     if demographics is not None:
         obs["demographics"] = demographics
+    if attention is not None:
+        obs["attention"] = attention
     return obs
 
 

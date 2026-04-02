@@ -92,6 +92,12 @@ async def get_analytics_summary(
         if any(v > 0 for v in bins.values()):
             age_distribution = bins
 
+    # Average attention engaged — behavioral metric, not gated by demographics_suppressed
+    attn_values = [r.attention_engaged for r in rows if r.attention_engaged is not None]
+    avg_attention_engaged: Optional[float] = None
+    if attn_values:
+        avg_attention_engaged = round(sum(attn_values) / len(attn_values), 4)
+
     return AnalyticsSummaryOut(
         window_description="rolling 1 hour",
         sampled_at=now,
@@ -99,6 +105,7 @@ async def get_analytics_summary(
         avg_count_per_window=round(avg_count, 2),
         peak_count=peak_count,
         age_distribution=age_distribution,
+        avg_attention_engaged=avg_attention_engaged,
         data_available=True,
     )
 
@@ -208,6 +215,18 @@ async def get_campaign_analytics(
         window_start = first
         window_end = last
 
+    # Compute avg_attention_at_trigger across all play events for this campaign
+    avg_attention_at_trigger: Optional[float] = None
+    if manifest_ids and total_impressions > 0:
+        attn_result = await db.execute(
+            select(PlayEvent.attention_at_trigger)
+            .where(PlayEvent.manifest_id.in_(manifest_ids))
+            .where(PlayEvent.attention_at_trigger.is_not(None))
+        )
+        attn_values = [row[0] for row in attn_result.all()]
+        if attn_values:
+            avg_attention_at_trigger = round(sum(attn_values) / len(attn_values), 4)
+
     return CampaignAnalyticsOut(
         campaign_id=campaign_id,
         campaign_name=campaign_row.name,
@@ -215,6 +234,7 @@ async def get_campaign_analytics(
         manifest_breakdown=breakdown,
         window_start=window_start,
         window_end=window_end,
+        avg_attention_at_trigger=avg_attention_at_trigger,
     )
 
 

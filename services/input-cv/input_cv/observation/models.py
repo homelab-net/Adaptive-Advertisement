@@ -75,6 +75,19 @@ class ObservationCounts(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0, default=0.0)
 
 
+class ObservationAttention(BaseModel):
+    """
+    Head-pose-derived display-engagement estimate over the observation window.
+    Behavioral metric — not demographic. Not subject to demographics_suppressed gate.
+    Absent when attention_camera_angle_validated=False or head-pose model inactive.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    engaged: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    ambient: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
 class ObservationDemographics(BaseModel):
     """
     Optional coarse demographic distributions for an observation window.
@@ -82,6 +95,7 @@ class ObservationDemographics(BaseModel):
     Privacy contract:
     - All attributes are probabilistic aggregate bins — no per-person identifiers.
     - gender bins represent coarse visual-appearance classification only.
+    - attire bins represent coarse clothing-category classification only.
     - extra="forbid" prevents undeclared fields carrying biometric data.
     """
 
@@ -89,6 +103,7 @@ class ObservationDemographics(BaseModel):
 
     age_group: Optional[dict[str, float]] = None
     gender: Optional[dict[str, float]] = None
+    attire: Optional[dict[str, float]] = None
     dwell_estimate_ms: Optional[int] = Field(default=None, ge=0)
     suppressed: Optional[bool] = None
 
@@ -117,6 +132,7 @@ class CvObservation(BaseModel):
     window_ms: int = Field(ge=0, default=100)
     counts: ObservationCounts = Field(default_factory=ObservationCounts)
     demographics: Optional[ObservationDemographics] = None
+    attention: Optional[ObservationAttention] = None
     quality: dict[str, Any] = Field(default_factory=dict)
     privacy: ObservationPrivacy = Field(default_factory=ObservationPrivacy)
 
